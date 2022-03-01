@@ -33,6 +33,8 @@ import argparse
 model_sources = {
     'bow' : (new bow()),
     'bilstm' : (new bilstm())
+    'bow_ensemble' : ()
+    'bilstm_ensemble' : ()
 }
 
 def main(*args):
@@ -53,15 +55,6 @@ def main(*args):
         
         #Preprocess data (stopwords, lemmatising)
         data = preprocessData(data) 
-
-        # check parsed arguements (as found in coursework pdf)
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--config', type=str, required=True, help='Configuration file')
-        parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
-        parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
-
-        # file arguements
-        args = parser.parse_args()
         
         for i in range(ensemble_count):
             
@@ -72,7 +65,7 @@ def main(*args):
 
             elif args.test:
             #call test function
-            
+
                 test(args.config)
 
             #Train selected model (BOW or BiLSTM) if "train" arg specified
@@ -92,7 +85,16 @@ def main(*args):
     displayResults()
 
 def handleArguments():
-    return true
+    
+     # check parsed arguements (as found in coursework pdf)
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--config', type=str, required=True, help='Configuration file')
+        parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
+        parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
+
+        # file arguements
+        args = parser.parse_args()
+        return args
                 
 def readConfig(configFile): 
 
