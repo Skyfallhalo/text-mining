@@ -19,30 +19,6 @@ class BiLSTMTagger(nn.Module):
         # The linear layer that maps from hidden state space to tag space
         self.hidden2tag = nn.Linear(hidden_dim, tagset_size)
 
-def train(configFile):
-
-    configLoader(configFile)
-
-
-def bow():
-
-    word_to_ix = {}
-    for sent, _ in data + test_data:
-        for word in sent:
-            if word not in word_to_ix:
-                word_to_ix[word] = len(word_to_ix)
-
-
-
-def test(configFile):
-
-    variables = configLoader(configFile)
-    for var in variables: # create variables using variable name and value
-
-        exec("%s = %d" % (var[0],var[1]))
-
-    
-
 def configLoader(configFile):
 
     # load config file (as found in coursework pdf)
@@ -56,6 +32,21 @@ def configLoader(configFile):
         for j in config[i]:
 
             globals()[j] = config[i][j] # make global variable with variable name in config file
+
+def bow():
+
+    print("a")
+
+def train(configFile):
+
+    configLoader(configFile)
+
+def test(configFile):
+
+    variables = configLoader(configFile)
+    for var in variables: # create variables using variable name and value
+
+        exec("%s = %d" % (var[0],var[1]))
 
 def main():
     # check parsed arguements (as found in coursework pdf)
