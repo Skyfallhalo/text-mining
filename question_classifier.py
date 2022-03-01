@@ -1,6 +1,5 @@
 #//////////////////////////////////////////////////////////
 #   question_classifier.py
-#   Reinterpretation of various unique implementations of 
 #   the "wc" command
 #   Created on:      11-Oct-2021 12:55:00
 #   Original Author: J. Sayce
