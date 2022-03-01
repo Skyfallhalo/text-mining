@@ -48,7 +48,7 @@ def main():
     if args.train:
 
         dataDir = config["Paths"]["path_train"]
-        devDir = config["Paths"]["path_train"]
+        devDir = config["Paths"]["path_dev"]
         
         dev = loadData(devDir)
 
@@ -67,8 +67,10 @@ def main():
     #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
     data = tokeniseData(data)        
     
+    stopWords = loadData(config["Paths"]["stop_words"])
+
     #Preprocess data (stopwords, lemmatising)
-    data = preprocessData(data) 
+    data = preprocessData(data, stopWords) 
 
     ensemble_size = config["Model"]["ensemble_size"]
     
@@ -86,10 +88,10 @@ def main():
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
 
-            testWithModel()
+            testModel()
 
             #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-            classifyModelOutput()
+            results.append(classifyModelOutput())
             
     aggregateResults(results)
     
@@ -125,9 +127,12 @@ def writeConfig(configFile, data):
 
 
 #Attempts to load data from the config-specified source for "Training Set 5".
-def loadData():
+def loadData(directory):
 
-    return ("DESC:other Lorem ?", "DESC:other Ipsum")
+    with open(directory, "r") as f: # get data
+        data = f.readlines()
+
+    return data
 
 
 #Split the data into tokens.
@@ -139,7 +144,7 @@ def tokeniseData(data):
 
 
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
-def preprocessData(data):
+def preprocessData(data, stopWords):
 
     for line in data:
         line = line.replace('stopword', '')
@@ -153,14 +158,14 @@ def generateWordEmbeddings():
    
     
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
-def trainModel():
+def trainModel(data):
 
     for line in data:
         line = line.split()
     return data
     
 #Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
-def testWithModel():
+def testModel(data):
     print("Debug!")
     
     
