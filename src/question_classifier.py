@@ -31,61 +31,52 @@ import argparse
 
 #Basic Structual Definitions
 model_sources = {
+
     'bow' : (new bow()),
     'bilstm' : (new bilstm())
-    'bow_ensemble' : ()
-    'bilstm_ensemble' : ()
+
 }
 
-def main(*args):
+def main():
     
     #Read Arguments
-    args_ok = handleArguments()
+    args = handleArguments()
     
     #Read Config Files 
-    config_ok = readConfig()
+    config = readConfig()
+
+    #Retrieve 
+    data = loadData()
     
-    while(args_ok and config_ok):
-
-        #Retrieve 
-        data = loadData()
+    #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+    data = tokeniseData(data)        
+    
+    #Preprocess data (stopwords, lemmatising)
+    data = preprocessData(data) 
+    
+    for i in range(ensemble_size):
         
-        #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-        data = tokeniseData(data)        
-        
-        #Preprocess data (stopwords, lemmatising)
-        data = preprocessData(data) 
-        
-        for i in range(ensemble_count):
-            
-            if args.train:
-            #call train function
+        if args.train:
+        #Train selected model (BOW or BiLSTM) if "train" arg specified
 
-                train(args.config)
+            trainModel()
 
-            elif args.test:
-            #call test function
+        elif args.test:
+        #Test selected model (BOW or BiLSTM) if "test" arg specified
 
-                test(args.config)
+            testWithModel()
 
-            #Train selected model (BOW or BiLSTM) if "train" arg specified
-            if train_model:
-                trainModel()
-            
-            #Test selected model (BOW or BiLSTM) if "test" arg specified
-            if test_model:
-                testWithModel()
-            
-            #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-            if test_model:
-                classifyModelOutput()
+
+        #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
+        if args.test:
+            classifyModelOutput()
     
     aggregateResults()
     
     displayResults()
 
 def handleArguments():
-    
+
      # check parsed arguements (as found in coursework pdf)
         parser = argparse.ArgumentParser()
         parser.add_argument('--config', type=str, required=True, help='Configuration file')
@@ -96,32 +87,32 @@ def handleArguments():
         args = parser.parse_args()
         return args
                 
-def readConfig(configFile): 
+def readConfig(configFile):
 
     # load config file (as found in coursework pdf)
     config = configparser.ConfigParser()
     config.sections()
     config.read(configFile)
 
-    variables = []
+    return config
 
-    for i in config.sections():
-        for j in config[i]:
+def writeConfig(configFile, data):
 
-            globals()[j] = config[i][j] # make global variable with variable name in config file 
-
-    if model_name not in model_sources:
-        raise Exception("Error: unknown model specified: '" + model_name + "'.") 
-    return true
+    config = configparser.ConfigParser()
+    
+    with open(configFile, 'w') as file:
+        config.write(file)
 
 
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData():
+
     return ("DESC:other Lorem ?", "DESC:other Ipsum")
 
 
 #Split the data into tokens.
 def tokeniseData(data):
+
     for line in data:
         line = line.split()
     return data
@@ -129,6 +120,7 @@ def tokeniseData(data):
 
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
 def preprocessData(data):
+
     for line in data:
         line = line.replace('stopword', '')
     return data
@@ -136,11 +128,13 @@ def preprocessData(data):
     
 #Uses either random, or pre-trained method to generate vector of word embeddings.
 def generateWordEmbeddings():
+
     return [('lorem', 1), ('ipsum', 0)]
    
     
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
 def trainModel():
+
     for line in data:
         line = line.split()
     return data
@@ -165,5 +159,5 @@ def displayResults():
 
 if __name__ == "__main__":
     
-    main(*sys.argv[1:])
-    sys.exit(0)
+    main()
+    exit()
