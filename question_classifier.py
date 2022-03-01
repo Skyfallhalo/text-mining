@@ -33,20 +33,13 @@ def configLoader(configFile):
 
             globals()[j] = config[i][j] # make global variable with variable name in config file
 
-def bow():
-
-    print("a")
-
 def train(configFile):
 
     configLoader(configFile)
 
 def test(configFile):
 
-    variables = configLoader(configFile)
-    for var in variables: # create variables using variable name and value
-
-        exec("%s = %d" % (var[0],var[1]))
+    configLoader(configFile)
 
 def main():
     # check parsed arguements (as found in coursework pdf)
