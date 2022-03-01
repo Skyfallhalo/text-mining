@@ -53,13 +53,17 @@ def main():
     
     #Preprocess data (stopwords, lemmatising)
     data = preprocessData(data) 
+
+    ensemble_size = config["Model"]["ensemble_size"]
     
+    results = []
+
     for i in range(ensemble_size):
         
         if args.train:
         #Train selected model (BOW or BiLSTM) if "train" arg specified
 
-            trainModel()
+            results.append(trainModel())
 
         elif args.test:
         #Test selected model (BOW or BiLSTM) if "test" arg specified
