@@ -25,17 +25,16 @@ import torch.optim as optim
 import numpy as np
 import configparser
 import argparse
+from bow import main as bow_main
+from bilstm import main as bilstm_main
+from embedding import main as embedding_main
+from ffnn_classifier import main as ffnn_main
 
 #Local Imports
 
 
 #Basic Structual Definitions
-model_sources = {
-
-    'bow' : (new bow()),
-    'bilstm' : (new bilstm())
-
-}
+model_sources = [['bow',bow_main], ['bilstm',bilstm_main]]
 
 def main():
     
@@ -46,8 +45,25 @@ def main():
     config = readConfig()
 
     #Retrieve 
-    data = loadData()
-    
+    if args.train:
+
+        dataDir = config["Paths"]["path_train"]
+        devDir = config["Paths"]["path_train"]
+        
+        dev = loadData(devDir)
+
+        #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+        dev = tokeniseData(dev)        
+        
+        #Preprocess data (stopwords, lemmatising)
+        dev = preprocessData(dev) 
+
+    elif args.test:
+
+        dataDir = config["Paths"]["path_train"]
+
+    data = loadData(dataDir)
+
     #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
     data = tokeniseData(data)        
     
@@ -56,26 +72,26 @@ def main():
 
     ensemble_size = config["Model"]["ensemble_size"]
     
+    word_embeddings = embedding_main(data)
+
     results = []
 
     for i in range(ensemble_size):
         
         if args.train:
-        #Train selected model (BOW or BiLSTM) if "train" arg specified
+            #Train selected model (BOW or BiLSTM) if "train" arg specified
 
             results.append(trainModel())
 
         elif args.test:
-        #Test selected model (BOW or BiLSTM) if "test" arg specified
+            #Test selected model (BOW or BiLSTM) if "test" arg specified
 
             testWithModel()
 
-
-        #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-        if args.test:
+            #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
             classifyModelOutput()
-    
-    aggregateResults()
+            
+    aggregateResults(results)
     
     displayResults()
 
