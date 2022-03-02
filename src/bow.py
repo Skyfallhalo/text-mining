@@ -12,17 +12,19 @@ import sys
 
 def main(data, vectorisedWords):
 
-    sentenceVectors = []
+    sentenceVectors = [] # finish list of bag of words sentence vectors
 
-    for sentence in data:
+    for sentence in data: 
+        
+        # vec_bow(s) = 1/length(s) sum for all words in sentence vec(w)
 
-        length = len(sentence)
-        sentenceVector = 0
+        length = len(sentence) # number of words
+        sentenceVector = 0 # for sum of word vectors
 
         for word in sentence:
 
-            vector = [i for i, v in enumerate(vectorisedWords) if v[0] == word]
-            sentenceVector += vector
+            vector = [i for i, v in enumerate(vectorisedWords) if v[0] == word] # find vector for given word in sentence
+            sentenceVector += vector 
 
         sentenceVectors.append(sentenceVector/length)
 
