@@ -8,15 +8,31 @@
 #
 #//////////////////////////////////////////////////////////
 
-def main(*args):
-    readConfig(args)
+import sys
+
+def main(data, vectorisedWords):
+
+    sentenceVectors = []
+
+    for sentence in data:
+
+        length = len(sentence)
+        sentenceVector = 0
+
+        for word in sentence:
+
+            vector = [i for i, v in enumerate(vectorisedWords) if v[0] == word]
+            sentenceVector += vector
+
+        sentenceVectors.append(sentenceVector/length)
+
+    return sentenceVectors
     
 #Input: Config directory passed from question_classifier.py
 #Task: Populate config values by reading config.ini
 #Output: config.
 def readConfig(configFile): 
+
+
     print("Debug")    
     
-if __name__ == "__main__":
-    main(*sys.argv[1:])
-    sys.exit(0)
