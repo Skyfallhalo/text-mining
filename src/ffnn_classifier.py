@@ -19,22 +19,32 @@ from sklearn.metrics import accuracy_score
 
 
 from sklearn.linear_model import SGDClassifier
+from sklearn.datasets._base import Bunch
 from sklearn.datasets import fetch_20newsgroups
+
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
 
 def main(*args):
     readConfig(args)
     
-    #Example Code
-    categories = ['alt.atheism', 'soc.religion.christian', 'comp.graphics', 'sci.med']     
+    train_file, train_targets = getFromFile('../data/train.txt')
+    test_file, test_targets = getFromFile('../data/test.txt')
     
-    twenty_train = fetch_20newsgroups(subset='train',categories=categories, shuffle=True, random_state=42)  
-    twenty_test = fetch_20newsgroups(subset='test', categories=categories, shuffle=True, random_state=42) 
+    #Generate universal category list, convert targets into indexes
+    categories = list(set(train_targets + test_targets))
+    train_targets = [categories.index(i) for i in train_targets]
+    test_targets = [categories.index(i) for i in test_targets]
+    
+    #Data: Questions
+    #Target_Names: Classifications
+    #Target: Indexes of classifications
+    train_data = Bunch(data=train_file, target=train_targets, target_names=categories)
+    test_data = Bunch(data=test_file, target=test_targets, target_names=categories)
     
     #Vectorising
     count_vect = CountVectorizer()
-    X_train_counts = count_vect.fit_transform(twenty_train.data)
+    X_train_counts = count_vect.fit_transform(train_data.data)
     
     #Transformer
     tf_transformer = TfidfTransformer(use_idf=False).fit(X_train_counts)
@@ -44,33 +54,31 @@ def main(*args):
     
     #Classifier (SGD)
     clf = SGDClassifier(loss='hinge', penalty='l2', alpha=1e-3, random_state=42,max_iter=5, tol=None)\
-        .fit(X_train_tfidf, twenty_train.target)
+        .fit(X_train_tfidf, train_data.target)
     
     #Display accuracy of predictions 
-    docs_test = twenty_test.data
+    docs_test = test_data.data
     X_new_counts = count_vect.transform(docs_test)
     new_data = tfidf_transformer.transform(X_new_counts)   
     predicted = clf.predict(new_data)
     
     #Display result of predictions
     for doc, category in zip(docs_test, predicted):
-        print('%r \n %s' % (doc, twenty_train.target_names[category]))     
+        print('%r \n %s' % (doc, test_data.target_names[category]))     
     
     #Display accuracy of predictions
-    model_accuracy = round(np.mean(predicted == twenty_test.target)*100, 2) 
+    model_accuracy = round(np.mean(predicted == test_data.target)*100, 2) 
     print('Accuracy: {}%'.format(model_accuracy))   
-    
-    return
-
-    #Make custom predictions
-    new_data_raw = ['God is love', 'OpenGL on the GPU is fast']
-    X_new_counts = count_vect.transform(twenty_train)
-    new_data = tfidf_transformer.transform(X_new_counts)   
-    predicted = clf.predict(new_data)
-    
-    #Display result of predictions
-    for doc, category in zip(new_data_raw, predicted):
-        print('%r => %s' % (doc, twenty_train.target_names[category]))        
+ 
+def getFromFile(directory):
+    data = []
+    targets = []
+    with open(directory) as my_file:
+        for line in my_file:
+            delimline = line.split(" ", 1)
+            data.append(delimline[1])  
+            targets.append(delimline[0])
+    return data, targets
  
 def predictData(dataset, new_data_raw, new_data, clf):
     
