@@ -9,6 +9,7 @@
 # //////////////////////////////////////////////////////////
 
 import sys
+import configparser
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,14 +17,15 @@ import torch.optim as optim
 
 
 class BiLSTM(nn.Module):
-    def __init__(self, embedding, embedding_dim, hidden_dim, num_layers, num_classes):
+    def __init__(self, embedding, hidden_dim, num_layers, class_num):
         super(BiLSTM, self).__init__()
         # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.hidden_size = hidden_dim
         self.num_layers = num_layers
         self.embedding = embedding
+        embedding_dim = embedding.weight.size(dim=1)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers, batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(hidden_dim * 2, num_classes)  # 2 for bidirection
+        self.fc = nn.Linear(hidden_dim * (2 if self.lstm.bidirectional else 1), class_num)  # 2 for bidirection
 
     def forward(self, seq):
         # # set initial states
@@ -32,13 +34,15 @@ class BiLSTM(nn.Module):
         seq = self.embedding(seq)
         # out, _ = self.lstm(seq, (h0, c0))
         out, _ = self.lstm(seq)
+        # print(out.shape)
         out = self.fc(out[:, -1, :])
-        return out
+        return F.softmax(out, dim=1)
+        # return out
 
 
-def main(*args):
+def main(embedding, config, class_num):
     # readConfig(args)
-    return BiLSTM()
+    return BiLSTM(embedding, int(config["Arguments"]["hidden_dim"]), int(config["Arguments"]["num_layers"]), class_num)
 
 
 # Input: Config directory passed from question_classifier.py
