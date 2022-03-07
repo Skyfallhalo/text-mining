@@ -1,5 +1,7 @@
 import random 
 
+random.seed(1)
+
 with open("train_5500.label.txt", "r") as f: # get data
    train = f.readlines()
 

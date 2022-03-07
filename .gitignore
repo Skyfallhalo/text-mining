@@ -1,2 +1,3 @@
 ## Ignore files and directories
 /.idea/
+*/__pycache__
