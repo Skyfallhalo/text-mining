@@ -8,27 +8,41 @@
 #
 #//////////////////////////////////////////////////////////
 
-import sys
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
 
-def main(data, vectorisedWords):
+class BOWClassifier(nn.Module):
 
-    sentenceVectors = [] # finish list of bag of words sentence vectors
+    def __init__(self, data_size, embedding_size):
 
-    for sentence in data: 
-        
-        # vec_bow(s) = 1/length(s) sum for all words in sentence vec(w)
+        super(BOWClassifier, self).__init__()
+        self.lin = nn.Linear(data_size, embedding_size)
 
-        length = len(sentence) # number of words
-        sentenceVector = 0 # for sum of word vectors
+    def forward(self, x):
 
-        for word in sentence:
+        return F.softmax(self.lin(x))
 
-            vector = [i for i, v in enumerate(vectorisedWords) if v[0] == word] # find vector for given word in sentence
-            sentenceVector += vector 
+def make_bow_vector(sentence, embedding):
+    # create a vector of zeros of vocab size = len(word_to_idx)
+    vec = torch.zeros(len(embedding))
 
-        sentenceVectors.append(sentenceVector/length)
+    for word in sentence:
 
-    return sentenceVectors
+        vec[embedding[word]]+=1
+
+    return vec.view(1, -1)
+
+def make_target(label, embedding):
+
+    return torch.LongTensor([embedding[label]])
+
+
+
+def main(data_size, embedding_size):
+
+    return BOWClassifier(data_size, embedding_size)
     
 #Input: Config directory passed from question_classifier.py
 #Task: Populate config values by reading config.ini
