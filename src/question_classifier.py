@@ -26,15 +26,16 @@ import numpy as np
 import configparser
 import argparse
 from bow import main as bow_main
-from bilstm import main as bilstm_main
+from bilstm import BiLSTM as bilstm_main
 from embedding import main as embedding_main
-from ffnn_classifier import main as ffnn_main
+from ffnn_classifier import trainModel
+from ffnn_classifier import testModel
 
 #Local Imports
 
 
 #Basic Structual Definitions
-model_sources = [['bow',bow_main], ['bilstm',bilstm_main]]
+model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 
 def main():
     
@@ -42,7 +43,9 @@ def main():
     args = handleArguments()
     
     #Read Config Files 
-    config = readConfig()
+    config = readConfig(args.config)
+    
+    stopWords = loadData(config["Paths"]["stop_words"])
 
     #Retrieve 
     if args.train:
@@ -56,7 +59,7 @@ def main():
         dev = tokeniseData(dev)        
         
         #Preprocess data (stopwords, lemmatising)
-        dev = preprocessData(dev) 
+        dev = preprocessData(dev, stopWords) 
 
     elif args.test:
 
@@ -66,13 +69,11 @@ def main():
 
     #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
     data = tokeniseData(data)        
-    
-    stopWords = loadData(config["Paths"]["stop_words"])
 
     #Preprocess data (stopwords, lemmatising)
     data = preprocessData(data, stopWords) 
 
-    ensemble_size = config["Model"]["ensemble_size"]
+    ensemble_size = int(config["Model"]["ensemble_size"])
     
     word_embeddings = embedding_main(data)
 
@@ -83,7 +84,7 @@ def main():
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
 
-            results.append(trainModel())
+            results.append(trainModel(data))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -129,7 +130,7 @@ def writeConfig(configFile, data):
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
 
-    with open(directory, "r") as f: # get data
+    with open(directory, "r", encoding = 'latin-1') as f: # get data
         data = f.readlines()
 
     return data
@@ -160,13 +161,13 @@ def generateWordEmbeddings():
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
 def trainModel(data):
 
-    for line in data:
-        line = line.split()
-    return data
+    model = model_sources['bilstm']
+    return trainModel(model)
     
 #Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
 def testModel(data):
-    print("Debug!")
+    
+    return testModel()
     
     
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
