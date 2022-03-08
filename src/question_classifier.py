@@ -26,7 +26,7 @@ import numpy as np
 import configparser
 import argparse
 from bow import main as bow_main
-from bilstm import BiLSTM as bilstm_main
+from bilstm import main as bilstm_main
 from embedding import main as embedding_main
 from ffnn_classifier import trainModel as ffnn_trainModel
 from ffnn_classifier import testModel as ffnn_testModel
@@ -45,7 +45,11 @@ def main():
     #Read Config Files 
     config = readConfig(args.config)
     
+    outputDimensions = 1
+    modelconfig = readConfig(config["Paths"]["bilstm_config"])
+        
     stopWords = loadData(config["Paths"]["stop_words"])
+    ensemble_size = int(config["Model"]["ensemble_size"]) 
 
     #Retrieve 
     if args.train:
@@ -67,20 +71,18 @@ def main():
 
     data = loadData(dataDir)
 
-    #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+    #Tokensive
     data = tokeniseData(data)        
 
     #Preprocess data (stopwords, lemmatising)
     data = preprocessData(data, stopWords) 
 
-    ensemble_size = int(config["Model"]["ensemble_size"])
-    
+    #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
     word_embeddings = embedding_main(data)
 
-    outputDimensions = 1
-    modelconfig = readConfig(config["Paths"]["bilstm_config"])
-    model = model_sources['bilstm'](word_embeddings, modelconfig, class_num=outputDimensions)
-    
+    #Construct model
+    model = model_sources['bilstm'](word_embeddings, modelconfig, class_num=outputDimensions)    
+
     results = []
 
     for i in range(ensemble_size):
