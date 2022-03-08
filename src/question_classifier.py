@@ -30,6 +30,9 @@ from bilstm import BiLSTM as bilstm_main
 from embedding import main as embedding_main
 from ffnn_classifier import trainModel
 from ffnn_classifier import testModel
+import codecs
+import numpy
+import re
 
 #Local Imports
 
@@ -136,12 +139,79 @@ def loadData(directory):
     return data
 
 
+
+def load_file(path):
+    quest_text = ''
+    question = codecs.open(path, 'r', encoding = 'ISO-8859-1')
+    question_lines = question.readlines()
+    for line in question_lines:
+        quest_text = quest_text + line
+    question.close()
+    return quest_text
+
+
 #Split the data into tokens.
 def tokeniseData(data):
+    text = load_file("dev-Copy1.txt")
+    stopWords = load_file("stopWords.txt")
+    text = text.split("\n")
+    text = text[:-1]
+    stopWords = stopWords.split("\n")
+    
+    
+    documents = []
+    for sen in text:
+        # Remove all the special characters
+        document = re.sub(r'\W', ' ', sen)
+        
+        # Converting to Lowercase
+        document = document.lower()
+        document = document.split()
+        document = document[1:]
+        
+        i = 0
+        for word in document:
+            if word in stopWords:
+                temp = document[1:]
+                for i in range(len(temp)):
+                    if temp[i] == word:
+                        temp[i]=""
+                        i+=1
+                document = temp
+                
+        document = list(filter(None, document))
+        documents.append(document)
+    
+    
+    listofWords=""
+    for doc in documents:
+        for word in doc:
+            listofWords = listofWords + " " + word
+            
+    dictionary = {}
+    tempList = listofWords.split()
+    for item in tempList:
+        #print(item)
+        if item in dictionary:
+            dictionary[item] += 1
+        else:
+            dictionary.update({item: 1})
+          
+        
+    k = 0
+    newDict = {}
+    uniqueWords=[]
+    for (key,value) in dictionary.items():
+        if value>k:
+            newDict[key] = value
+            uniqueWords.append(key)
+    
+    print(newDict)
+    print(uniqueWords)
+    print(len(uniqueWords))
+    
+    return uniqueWords
 
-    for line in data:
-        line = line.split()
-    return data
 
 
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
