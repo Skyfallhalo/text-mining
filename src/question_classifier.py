@@ -28,8 +28,8 @@ import argparse
 from bow import main as bow_main
 from bilstm import BiLSTM as bilstm_main
 from embedding import main as embedding_main
-from ffnn_classifier import trainModel
-from ffnn_classifier import testModel
+from ffnn_classifier import trainModel as ffnn_trainModel
+from ffnn_classifier import testModel as ffnn_testModel
 
 #Local Imports
 
@@ -77,14 +77,17 @@ def main():
     
     word_embeddings = embedding_main(data)
 
+    outputDimensions = 1
+    modelconfig = readConfig(config["Paths"]["bilstm_config"])
+    model = model_sources['bilstm'](word_embeddings, modelconfig, class_num=outputDimensions)
+    
     results = []
 
     for i in range(ensemble_size):
         
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
-
-            results.append(trainModel(data))
+            results.append(ffnn_trainModel(data, model))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -161,8 +164,8 @@ def generateWordEmbeddings():
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
 def trainModel(data):
 
-    model = model_sources['bilstm']
-    return trainModel(model)
+    model = model_sources['bilstm']()
+    return ffnn_trainModel(data, model)
     
 #Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
 def testModel(data):
