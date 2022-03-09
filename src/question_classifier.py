@@ -28,6 +28,7 @@ import argparse
 from bow import main as bow_main
 from bilstm import main as bilstm_main
 from embedding import pretrained_embedding
+from embedding import new_pretrained_embedding
 from embedding import random_embedding
 from ffnn_classifier import trainModel as ffnn_trainModel
 from ffnn_classifier import testModel as ffnn_testModel
@@ -67,7 +68,7 @@ def main():
         text, targets = preprocessData(dev)         
         
         #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-        dev = tokeniseData(dev, stopWords)        
+        lemmadata, tokens = tokeniseData(text, stopWords)        
         
     elif args.test:
 
@@ -79,10 +80,12 @@ def main():
     text, targets = preprocessData(data)     
     
     #Tokensive
-    tokens = tokeniseData(text, stopWords)        
+    lemmadata, tokens = tokeniseData(text, stopWords)        
 
     #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
     vocabulary, embeddings = generateWordEmbeddings(tokens, config)
+
+    encodeddata = encodeData(lemmadata, vocabulary)
 
     #Construct model
     model = model_sources['bilstm'](embeddings, modelconfig, class_num=outputDimensions)    
@@ -93,7 +96,7 @@ def main():
         
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
-            results.append(ffnn_trainModel(data, model))
+            results.append(ffnn_trainModel(encodeddata, model))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -173,7 +176,6 @@ def tokeniseData(data,stopwords):
         # Converting to Lowercase
         document = document.lower()
         document = document.split()
-        document = document[1:]
         
         i = 0
         for word in document:
@@ -212,7 +214,7 @@ def tokeniseData(data,stopwords):
             newDict[key] = value
             uniqueWords.append(key)
     
-    return uniqueWords
+    return documents, uniqueWords
 
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
 def preprocessData(data):
@@ -235,11 +237,25 @@ def generateWordEmbeddings(data, config):
     if(config["Embeddings"]["use_pretrained"]):
         vocab = config["Embeddings"]["path_vocabulary"]
         emb = config["Embeddings"]["path_pretrained"]
-        return pretrained_embedding(vocab, emb)
+        return new_pretrained_embedding(vocab, emb)
     else:
         return random_embedding(data)
     
+#Converts data into their indexes of their vocabulary.
+def encodeData(lemmadata, vocabulary):    
     
+    encoded = []
+    for sent in lemmadata:
+        encode = []
+        for word in sent:
+            if word in vocabulary:
+                encode.append(str(vocabulary.index(word)))
+            else:
+                encode.append(str(len(vocabulary)-1))
+        encoded.append(encode) 
+        
+    return encoded
+
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
 def trainModel(data):
 
