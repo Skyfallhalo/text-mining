@@ -104,6 +104,7 @@ def random_embedding(corpus, min_count=3, vector_size=200):
             real_vocab.append(i)
 
     real_vocab.append('UNK')
+    real_vocab.insert(0,'')
 
     vocabulary_size = len(real_vocab)
     emb = nn.Embedding(vocabulary_size, vector_size)
@@ -112,13 +113,14 @@ def random_embedding(corpus, min_count=3, vector_size=200):
 
 
 
-def new_pretrained_embedding(vocab_fp, emb_fp):
+def new_pretrained_embedding(vocab_fp, emb_fp,freeze=True):
     """
     return the pretrained embeddings
     
     Attributes:
       vocab_fp: file path for vocabulary file (.txt)
       emb_fp: file path for vector file (.txt)
+      freeze: bolean, whether to freeze the tensors.
       
     Returns:
       vocab_list: a list that contains all words (including 'UNK' for words not in it)
@@ -158,7 +160,6 @@ def new_pretrained_embedding(vocab_fp, emb_fp):
     vecs2 = np.concatenate((a,vecs))
 
     weights = torch.FloatTensor(vecs2)
-    emb = nn.Embedding.from_pretrained(weights)
+    emb = nn.Embedding.from_pretrained(weights,freeze=freeze)
         
     return vocab_list, emb
-
