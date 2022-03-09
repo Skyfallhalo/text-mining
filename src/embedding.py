@@ -112,5 +112,53 @@ def random_embedding(corpus, min_count=3, vector_size=200):
 
 
 
+def new_pretrained_embedding(vocab_fp, emb_fp):
+    """
+    return the pretrained embeddings
+    
+    Attributes:
+      vocab_fp: file path for vocabulary file (.txt)
+      emb_fp: file path for vector file (.txt)
+      
+    Returns:
+      vocab_list: a list that contains all words (including 'UNK' for words not in it)
+      emb: the nn.embedding type that contains embedding informations for all vocab 
+    """
+        #load the vocab
+    with open("/Users/han/Desktop/CW1/vocab2.txt", "r") as my_file:
+        vocab_list = my_file.read().split(',')
 
+    while '' in vocab_list:
+        vocab_list.remove('')
+    vocab_list.insert(0,'')
+
+    #load embedding vectors
+    with open('/Users/han/Desktop/CW1/emb2.txt', "r") as my_file:
+        content_list = my_file.read().split(';')
+
+
+    vectors = []
+    for vector in content_list:
+        vec = []
+        elements = vector.split(' ')
+        for i in elements:
+            if '[' in i:
+                i = i.replace('[', '')
+            if ']' in i:
+                i = i.replace(']', '')
+            if '\n' in i:
+                i = i.replace('\n', '')
+            if i != '':
+                vec.append(float(i)) 
+        vectors.append(vec)
+
+    vectors.remove([])  
+    vecs = np.array(vectors)
+    a = np.zeros((1,200))
+    vecs2 = np.concatenate((a,vecs))
+
+    weights = torch.FloatTensor(vecs2)
+    emb = nn.Embedding.from_pretrained(weights)
+        
+    return vocab_list, emb
 
