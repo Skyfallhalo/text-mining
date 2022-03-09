@@ -29,12 +29,13 @@ import torch.nn as nn
 
 
 
+
 def main(config,corpus=None):
     # readConfig(args)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     trimmed_vocab_list = []
-    if config["Model"].getboolean("pre_emb"):
+    if config["Using pre-trained Embeddings"].getboolean("pre_emb"):
         vec_list = []
         vec_size = 0
         with open(config["Using pre-trained Embeddings"]["path_pre_emb"]) as f:
@@ -94,7 +95,7 @@ def main(config,corpus=None):
         
 
     embedding.to(device)
-    embedding.weight.requires_grad = not config["Model"].getboolean("emb_freeze")
+    embedding.weight.requires_grad = not config["Using pre-trained Embeddings"].getboolean("emb_freeze")
 
     return embedding, trimmed_vocab_list
 
