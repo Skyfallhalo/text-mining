@@ -26,21 +26,14 @@ import numpy as np
 import configparser
 import argparse
 from bow import main as bow_main
-<<<<<<< HEAD
-from bilstm import BiLSTM as bilstm_main
-from embedding import main as embedding_main
-from ffnn_classifier import trainModel
-from ffnn_classifier import testModel
-import codecs
-import numpy
-import re
-=======
 from bilstm import main as bilstm_main
 from embedding import pretrained_embedding
 from embedding import random_embedding
 from ffnn_classifier import trainModel as ffnn_trainModel
 from ffnn_classifier import testModel as ffnn_testModel
->>>>>>> 0b15443137b189cb86718997bf843a0a9d2aad28
+import codecs
+import numpy
+import re
 
 #Local Imports
 
@@ -70,26 +63,26 @@ def main():
         
         dev = loadData(devDir)
 
-        #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-        dev = tokeniseData(dev)        
-        
         #Preprocess data (stopwords, lemmatising)
-        dev = preprocessData(dev, stopWords) 
-
+        text, targets = preprocessData(dev)         
+        
+        #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+        dev = tokeniseData(dev, stopWords)        
+        
     elif args.test:
 
         dataDir = config["Paths"]["path_train"]
 
     data = loadData(dataDir)
 
-    #Tokensive
-    data = tokeniseData(data)        
-
     #Preprocess data (stopwords, lemmatising)
-    data = preprocessData(data, stopWords) 
+    text, targets = preprocessData(data)     
+    
+    #Tokensive
+    tokens = tokeniseData(text, stopWords)        
 
     #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-    vocabulary, embeddings = generateWordEmbeddings(data, config)
+    vocabulary, embeddings = generateWordEmbeddings(tokens, config)
 
     #Construct model
     model = model_sources['bilstm'](embeddings, modelconfig, class_num=outputDimensions)    
@@ -167,9 +160,9 @@ def load_file(path):
 def tokeniseData(data,stopwords):
     text = data
     stopWords = stopwords
-    text = text.split("\n")
+    #text = text.split("\n")
     text = text[:-1]
-    stopWords = stopWords.split("\n")
+    #stopWords = stopWords.split("\n")
     
     
     documents = []
@@ -221,10 +214,8 @@ def tokeniseData(data,stopwords):
     
     return uniqueWords
 
-
-
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
-def preprocessData(data, stopWords):
+def preprocessData(data):
 
     text, targets = [], []
     
