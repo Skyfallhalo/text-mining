@@ -27,9 +27,7 @@ import configparser
 import argparse
 from bow import main as bow_main
 from bilstm import main as bilstm_main
-from embedding import pretrained_embedding
-from embedding import new_pretrained_embedding
-from embedding import random_embedding
+from embedding import main as embedding_main
 from ffnn_classifier import trainModel as ffnn_trainModel
 from ffnn_classifier import testModel as ffnn_testModel
 import codecs
