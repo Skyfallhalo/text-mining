@@ -186,8 +186,8 @@ def main(config,corpus=None):
 # Input: Config directory passed from question_classifier.py
 # Task: Populate config values by reading config.ini
 # Output: config.
-def readConfig(configFile):
-    print("Debug")    
+#def readConfig(configFile):
+#    print("Debug")    
 
 
 if __name__ == "__main__":
