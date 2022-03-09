@@ -36,7 +36,8 @@ class BiLSTM(nn.Module):
         seq = self.embedding(seq).to(self.device)
         # print(seq.shape)
         # out, _ = self.lstm(seq, (h0, c0))
-        out, (ht, ct) = self.lstm(seq)
+        # out, (ht, ct) = self.lstm(seq)
+        out, _ = self.lstm(seq)
         # print(out.shape)
         # print(ht.shape)
         # print(ct.shape)
@@ -45,7 +46,6 @@ class BiLSTM(nn.Module):
         # out = self.fc(out[:, -1, :self.hidden_size] + out[:, 0, self.hidden_size:])
         out = self.fc(out[:, -1, :])
         # print(out.shape)
-        # return F.softmax(out, dim=1)
         return out
 
 
