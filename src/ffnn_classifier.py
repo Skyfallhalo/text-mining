@@ -126,6 +126,10 @@ def main(*args):
     path='saved_weights.pt'
     model.load_state_dict(torch.load(path));
     model.eval();
+    
+def prepare_sequence(seq, to_ix):
+    idxs = [to_ix[w] for w in seq]
+    return torch.tensor(idxs, dtype=torch.long)    
 
 def trainModel(data, model):
            
@@ -146,42 +150,45 @@ def trainModel(data, model):
     criterion = criterion.to(device)    
     
     #Main loop
+    epoch_loss, epoch_acc = 0, 0
+     
     for epoch in range(numEpochs):
 
-        epoch_loss, epoch_acc = 0, 0
-        
-        model.train()  
-        
-        for bidx, batch in tqdm(enumerate(data_train)):
+        for sentence, tags in data_train:
             
-            #Reset grads
-            optimizer.zero_grad()   
+            model.zero_grad()
+         
+            sentence_in = prepare_sequence(sentence, word_to_ix)
+            targets = prepare_sequence(tags, tag_to_ix)
+         
+            tag_scores = model(data)
             
-            #Prepare inputs
-            text, text_lengths = batch.Text   
-            
-            #Forward pass
-            predictions = model(text)
-            
-            #Compute loss/accuracy and backpropogate
-            loss = criterion(predictions, batch.Label)        
+            #Compute loss/accuracy 
+            loss = loss_function(tag_scores, targets)
             acc = binary_accuracy(predictions, batch.Label)   
-            loss.backward()       
-            optimizer.step()      
             
-            #loss and accuracy
+            #Backpropogate and optimise
+            loss.backward()
+            optimizer.step()        
+        
+            #Loss and accuracy
             epoch_loss += loss.item()  
-            epoch_acc += acc.item()    
-            
-        train_loss, train_acc = epoch_loss / len(iterator), epoch_acc / len(iterator)
+            epoch_acc += acc.item()           
+        
+    train_loss, train_acc = epoch_loss / len(iterator), epoch_acc / len(iterator)
 
-        #Save a local best to file
-        if train_loss < bestLoss:
-            bestLoss = valid_loss
-            torch.save(model.state_dict(), 'saved_weights.pt')
-
-        print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%')
-        print(f'\tTest Loss: {valid_loss:.3f} |  Test Acc: {valid_acc*100:.2f}%')     
+    ##Save a local best to file
+    #if train_loss < bestLoss:
+    #    bestLoss = valid_loss
+    #    torch.save(model.state_dict(), 'saved_weights.pt')
+    #
+    #print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%')
+    #print(f'\tTest Loss: {valid_loss:.3f} |  Test Acc: {valid_acc*100:.2f}%')   
+    
+    ##load weights
+    #path='saved_weights.pt'
+    #model.load_state_dict(torch.load(path));
+    #model.eval();    
     
 def testModel(model, iterator, criterion):
     

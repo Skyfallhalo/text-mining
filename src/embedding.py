@@ -24,6 +24,7 @@
 
 import numpy as np
 import torch
+import torch.nn as nn
 
 def pretrained_embedding(vocab_fp, emb_fp):
     """
