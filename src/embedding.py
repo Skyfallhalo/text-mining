@@ -125,7 +125,7 @@ def new_pretrained_embedding(vocab_fp, emb_fp):
       emb: the nn.embedding type that contains embedding informations for all vocab 
     """
         #load the vocab
-    with open("/Users/han/Desktop/CW1/vocab2.txt", "r") as my_file:
+    with open(vocab_fp, "r") as my_file:
         vocab_list = my_file.read().split(',')
 
     while '' in vocab_list:
@@ -133,7 +133,7 @@ def new_pretrained_embedding(vocab_fp, emb_fp):
     vocab_list.insert(0,'')
 
     #load embedding vectors
-    with open('/Users/han/Desktop/CW1/emb2.txt', "r") as my_file:
+    with open(emb_fp, "r") as my_file:
         content_list = my_file.read().split(';')
 
 
