@@ -13,8 +13,11 @@ import sys
 import random
 
 import torch   
+from torch.utils.data import Dataset, DataLoader
+
 import torchtext   
 import torch.nn as nn
+import torch.nn.functional as F
 
 import torch.optim as optim
 
@@ -47,91 +50,12 @@ def binary_accuracy(preds, y):
     acc = correct.sum() / len(correct)
     return acc
 
-class questionClassifier(nn.Module):
-
-    def __init__(self, 
-                 vocabularySize,
-                 embeddingDimensions,  
-                 hiddenlayerDimensions, 
-                 outputDimensions, 
-                 layerCount, 
-                 isBidirectional, 
-                 dropoutRate):
-        
-        super().__init__()          
-
-        modelChosen = 'bilstm'
-        
-        #Embedding Layer (nn.Embedding)
-        self.embedding = nn.Embedding(vocabularySize, embeddingDimensions)
-
-        if(modelChosen == 'bow'): #BOW layer (nn.lin)
-            self.lin = nn.Linear(vocabularySize, embeddingDimensions)
-            
-        elif (modelChosen == 'bilstm'): #(Bi)LSTM layer (nn.LSTM)
-            
-            self.lstm = nn.LSTM(embeddingDimensions, #Number of expected features in input x
-                                hiddenlayerDimensions,  #Number of features in the hidden layers
-                                layerCount,         #Number of layers of stacked BiLSTM instances.
-                                bias=True,          #Applies bias values.
-                                batch_first=True,   #Structure of output (b, s, f) vs. (s, b, f)   
-                                bidirectional=isBidirectional, #BiLSTM.
-                                dropout=dropoutRate,    #Percentage of dropout between non-final layers
-                                proj_size=0 #Modifies LSTM to use projections of corresponding size.
-                                )            
-        
-
-        #Hidden Layers
-        self.fc = nn.Linear(hiddenlayerDimensions * (2 if 'bilstm' in modelChosen else 1), outputDimensions)  # 2 for bidirection 
-
-        #Activation Function (always Softmax)
-        self.act = nn.Softmax()       
-
-    def forward(self, dataInput, dataLength):
-
-        # # set initial states
-        # h0 = torch.zeros(self.num_layers * 2, seq.size(0), self.hidden_size).to(self.device)  # 2 for bidirection
-        # c0 = torch.zeros(self.num_layers * 2, seq.size(0), self.hidden_size).to(self.device)
-        #   seq = self.embedding(seq)
-        # out, _ = self.lstm(seq, (h0, c0))
-        #   out, _ = self.lstm(seq)
-        # print(out.shape)
-        #   out = self.fc(out[:, -1, :])
-        #   return F.softmax(out, dim=1)
-        # return out
-        
-        
-        
-        #Embed
-        dataEmbedded = self.embedding(dataInput) #[batchSize, inputLength, embeddingDimensions]
-
-        #Pack
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(dataEmbedded, dataLength,batch_first=True)
-
-        #Apply 
-        packed_output, (hidden, cell) = self.lstm(packed_embedded)
-        #hidden = [batch size, num layers * num directions,hid dim]
-        #cell = [batch size, num layers * num directions,hid dim]
-
-        #concat the final forward and backward hidden state
-        hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1)
-
-        #hidden = [batch size, hid dim * num directions]
-        dataOutput=self.fc(hidden)
-
-        #Activate
-        outputs=self.act(dataOutput)
-        
-        return outputs
-
 def main(*args):
     
     #Get Config Params
     readConfig(args)
     
-    batchSize = 128  
-    numEpochs = 10
-    bestLoss = float('inf')    
+ 
     
     #Static Hyperparams   
     embeddingDimensions = 100
@@ -161,13 +85,7 @@ def main(*args):
     #Derived Hyperparams
     vocabularySize = len(dataText.vocab)
     
-    #Load an iterator
-    train_iterator, test_iterator = torchtext.legacy.data.BucketIterator.splits(
-        (data_train, data_test), 
-        batch_size = batchSize,
-        sort_key = lambda x: len(x.Text),
-        sort_within_batch=True,
-        device = device)    
+ 
     
     #Model Construction
     model = questionClassifier(vocabularySize, embeddingDimensions, hiddenlayerDimensions,outputDimensions, layerCount, 
@@ -178,7 +96,7 @@ def main(*args):
         pretrained_embeddings = dataText.vocab.vectors
         model.embedding.weight.data.copy_(pretrained_embeddings)
     
-    #Define the Optim. and Loss metric
+    #Define the Optim. (Stochastic G.D.) and Loss metric
     optimiser = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
     criterion = nn.BCELoss()    
     
@@ -208,49 +126,71 @@ def main(*args):
     path='saved_weights.pt'
     model.load_state_dict(torch.load(path));
     model.eval();
-       
     
-def predict(model, sentence):
-    nlp = spacy.load('en_core_web_sm')
-    tokenized = [tok.text for tok in nlp.tokenizer(sentence)]  #tokenize the sentence 
-    indexed = [TEXT.vocab.stoi[t] for t in tokenized]          #convert to integer sequence
-    length = [len(indexed)]                                    #compute no. of words
-    tensor = torch.LongTensor(indexed).to(device)              #convert to tensor
-    tensor = tensor.unsqueeze(1).T                             #reshape in form of batch,no. of words
-    length_tensor = torch.LongTensor(length)                   #convert to tensor
-    prediction = model(tensor, length_tensor)                  #prediction 
-    return prediction.item()     
+def prepare_sequence(seq, to_ix):
+    idxs = [to_ix[w] for w in seq]
+    return torch.tensor(idxs, dtype=torch.long)    
 
-def trainModel(model, iterator, optimizer, criterion):
-        
+def trainModel(data, model):
+           
+    batchSize = 128  
+    numEpochs = 10
+    bestLoss = float('inf')       
+    
+    #Define the Optim. (Stochastic G.D.) and Loss metric
+    data_train = DataLoader(dataset = data, batch_size = batchSize, shuffle =False)
+    optimiser = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    criterion = nn.BCELoss()    
+
+    #CUDA
+    #Cuda algorithms
+    torch.backends.cudnn.deterministic = True    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')      
+    model = model.to(device)
+    criterion = criterion.to(device)    
+    
+    #Main loop
     epoch_loss, epoch_acc = 0, 0
-    
-    model.train()  
-    
-    for batch in iterator:
-        
-        #Reset grads
-        optimizer.zero_grad()   
-        
-        #Prepare inputs
-        text, text_lengths = batch.Text   
-        
-        #Forward pass (there's an error here)
-        predictions = model(text, text_lengths).squeeze()  
-        
-        #Compute loss/accuracy and backpropogate
-        loss = criterion(predictions, batch.Label)        
-        acc = binary_accuracy(predictions, batch.Label)   
-        loss.backward()       
-        optimizer.step()      
-        
-        #loss and accuracy
-        epoch_loss += loss.item()  
-        epoch_acc += acc.item()    
-        
-    return epoch_loss / len(iterator), epoch_acc / len(iterator)
+     
+    for epoch in range(numEpochs):
 
-def evalModel(model, iterator, criterion):
+        for sentence, tags in data_train:
+            
+            model.zero_grad()
+         
+            sentence_in = prepare_sequence(sentence, word_to_ix)
+            targets = prepare_sequence(tags, tag_to_ix)
+         
+            tag_scores = model(data)
+            
+            #Compute loss/accuracy 
+            loss = loss_function(tag_scores, targets)
+            acc = binary_accuracy(predictions, batch.Label)   
+            
+            #Backpropogate and optimise
+            loss.backward()
+            optimizer.step()        
+        
+            #Loss and accuracy
+            epoch_loss += loss.item()  
+            epoch_acc += acc.item()           
+        
+    train_loss, train_acc = epoch_loss / len(iterator), epoch_acc / len(iterator)
+
+    ##Save a local best to file
+    #if train_loss < bestLoss:
+    #    bestLoss = valid_loss
+    #    torch.save(model.state_dict(), 'saved_weights.pt')
+    #
+    #print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%')
+    #print(f'\tTest Loss: {valid_loss:.3f} |  Test Acc: {valid_acc*100:.2f}%')   
+    
+    ##load weights
+    #path='saved_weights.pt'
+    #model.load_state_dict(torch.load(path));
+    #model.eval();    
+    
+def testModel(model, iterator, criterion):
     
     epoch_loss, epoch_acc = 0, 0
 
@@ -265,7 +205,7 @@ def evalModel(model, iterator, criterion):
             text, text_lengths = batch.Text
             
             #Forward pass (there's an error here)
-            predictions = model(text, text_lengths).squeeze()
+            predictions = model(text)
             
             #Compute loss/accuracy, do not backpropogate
             loss = criterion(predictions, batch.Label)

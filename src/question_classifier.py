@@ -26,6 +26,7 @@ import numpy as np
 import configparser
 import argparse
 from bow import main as bow_main
+<<<<<<< HEAD
 from bilstm import BiLSTM as bilstm_main
 from embedding import main as embedding_main
 from ffnn_classifier import trainModel
@@ -33,6 +34,13 @@ from ffnn_classifier import testModel
 import codecs
 import numpy
 import re
+=======
+from bilstm import main as bilstm_main
+from embedding import pretrained_embedding
+from embedding import random_embedding
+from ffnn_classifier import trainModel as ffnn_trainModel
+from ffnn_classifier import testModel as ffnn_testModel
+>>>>>>> 0b15443137b189cb86718997bf843a0a9d2aad28
 
 #Local Imports
 
@@ -48,7 +56,11 @@ def main():
     #Read Config Files 
     config = readConfig(args.config)
     
+    outputDimensions = 1
+    modelconfig = readConfig(config["Paths"]["bilstm_config"])
+        
     stopWords = loadData(config["Paths"]["stop_words"])
+    ensemble_size = int(config["Model"]["ensemble_size"]) 
 
     #Retrieve 
     if args.train:
@@ -70,15 +82,17 @@ def main():
 
     data = loadData(dataDir)
 
-    #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+    #Tokensive
     data = tokeniseData(data)        
 
     #Preprocess data (stopwords, lemmatising)
     data = preprocessData(data, stopWords) 
 
-    ensemble_size = int(config["Model"]["ensemble_size"])
-    
-    word_embeddings = embedding_main(data)
+    #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+    vocabulary, embeddings = generateWordEmbeddings(data, config)
+
+    #Construct model
+    model = model_sources['bilstm'](embeddings, modelconfig, class_num=outputDimensions)    
 
     results = []
 
@@ -86,8 +100,7 @@ def main():
         
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
-
-            results.append(trainModel(data))
+            results.append(ffnn_trainModel(data, model))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -213,22 +226,34 @@ def tokeniseData(data,stopwords):
 #Removes stopwords, lemma-izes, etc. according to config-specified rules.
 def preprocessData(data, stopWords):
 
+    text, targets = [], []
+    
     for line in data:
-        line = line.replace('stopword', '')
-    return data
+        delimline = line.split(" ", 1)
+        text.append(delimline[1])
+        targets.append(delimline[0])    
+    
+    return [text, targets]
     
     
 #Uses either random, or pre-trained method to generate vector of word embeddings.
-def generateWordEmbeddings():
+def generateWordEmbeddings(data, config):
+    
+    text, targets = [], []
 
-    return [('lorem', 1), ('ipsum', 0)]
-   
+    if(config["Embeddings"]["use_pretrained"]):
+        vocab = config["Embeddings"]["path_vocabulary"]
+        emb = config["Embeddings"]["path_pretrained"]
+        return pretrained_embedding(vocab, emb)
+    else:
+        return random_embedding(data)
+    
     
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
 def trainModel(data):
 
-    model = model_sources['bilstm']
-    return trainModel(model)
+    model = model_sources['bilstm']()
+    return ffnn_trainModel(data, model)
     
 #Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
 def testModel(data):
