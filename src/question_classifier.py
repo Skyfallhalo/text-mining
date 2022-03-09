@@ -87,7 +87,7 @@ def main():
 
     encodeddata = encodeData(lemmadata, vocabulary)
 
-    #Construct model
+    #Construct model (todo: select model)
     model = model_sources['bilstm'](embeddings, modelconfig, class_num=outputDimensions)    
 
     results = []
@@ -144,6 +144,7 @@ def loadData(directory):
 
     with open(directory, "r", encoding = 'latin-1') as f: # get data
         data = f.readlines()
+        data = [line[:-1] for line in data]
 
     return data
 
@@ -241,10 +242,13 @@ def generateWordEmbeddings(data, config):
     else:
         return random_embedding(data)
     
-#Converts data into their indexes of their vocabulary.
+#Converts data into their indexes of their vocabulary, and pads if appropriate.
 def encodeData(lemmadata, vocabulary):    
     
     encoded = []
+    #The length we pad each encoded string to. Length of biggest instance *1.5.
+    padlength = int(max([len(i) for i in lemmadata])*1.5) #Chosen arbitrarily.
+    
     for sent in lemmadata:
         encode = []
         for word in sent:
@@ -252,6 +256,8 @@ def encodeData(lemmadata, vocabulary):
                 encode.append(str(vocabulary.index(word)))
             else:
                 encode.append(str(len(vocabulary)-1))
+        
+        encode += [0] * (padlength - len(encode))
         encoded.append(encode) 
         
     return encoded
