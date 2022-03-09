@@ -151,9 +151,9 @@ def load_file(path):
 
 
 #Split the data into tokens.
-def tokeniseData(data):
-    text = load_file("dev-Copy1.txt")
-    stopWords = load_file("stopWords.txt")
+def tokeniseData(data,stopwords):
+    text = data
+    stopWords = stopwords
     text = text.split("\n")
     text = text[:-1]
     stopWords = stopWords.split("\n")
@@ -205,10 +205,6 @@ def tokeniseData(data):
         if value>k:
             newDict[key] = value
             uniqueWords.append(key)
-    
-    print(newDict)
-    print(uniqueWords)
-    print(len(uniqueWords))
     
     return uniqueWords
 
