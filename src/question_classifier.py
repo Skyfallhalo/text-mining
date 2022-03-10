@@ -1,16 +1,18 @@
 #//////////////////////////////////////////////////////////
 #   question_classifier.py
-#   the "wc" command
+#
 #   Created on:      11-Oct-2021 12:55:00
-#   Original Author: J. Sayce
+#   Original Authors: Alexander Trebilcock, Ashka K. Abrarriadi, 
+#   Joshua Sayce, Oluwadamini Akpotohwo, Wenqi Han, Zhaoyu Han
+#
 #   Specification:
 #
 #   question_classifier.py is the base file for the Team Late 
 #   submission for the Question Classifier project. It:
 #
-#   - Handles arguments
-#   - Validates config files (and complains if they're wrong)
-#   - Loads appropriate modules (preprocessor, embedder...) into generic steps
+#   - Identifies arguments
+#   - Interprets config files
+#   - Preprocesses data, splitting it into text and labels.
 #   - Conducts generic model behaviours on module instances
 #   - Aggregates ensemble model results (if appropriate)
 #   - Handles formatting of feedback/errors from modules to user
@@ -18,39 +20,36 @@
 #//////////////////////////////////////////////////////////
 
 #Library Imports
+import argparse
+import configparser
+
+import codecs
+import re
+import numpy
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import configparser
-import argparse
+
 from bow import main as bow_main
 from bilstm import main as bilstm_main
+
 from embedding import main as embedding_main
+
 from ffnn_classifier import trainModel as ffnn_trainModel
 from ffnn_classifier import testModel as ffnn_testModel
-import codecs
-import numpy
-import re
-
-#Local Imports
-
 
 #Basic Structual Definitions
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 
 def main():
     
-    #Read Arguments
+    #Read Arguments, Config Files
     args = handleArguments()
-    
-    #Read Config Files 
     config = readConfig(args.config)
-    
-    outputDimensions = 1
-    modelconfig = readConfig(config["Paths"]["bilstm_config"])
-        
+     
     stopWords = loadData(config["Paths"]["stop_words"])
     ensemble_size = int(config["Model"]["ensemble_size"]) 
 
@@ -72,6 +71,7 @@ def main():
 
         dataDir = config["Paths"]["path_train"]
 
+    #Load data from file
     data = loadData(dataDir)
 
     #Preprocess data: splits strings into lists of their labels and text.
@@ -86,11 +86,21 @@ def main():
     #Encode: Convert data into numerical equivalents
     encodeddata = encodeData(lemmadata, vocabulary)
 
-    #Construct model (todo: select model)
-    model = model_sources['bilstm'](embeddings, modelconfig, class_num=outputDimensions)    
+    #Construct model
+    modelstring = config["Model"]["model"]
+    modelconfig = readConfig(config["Paths"][modelstring+"_config"])
+    
+    if(modelstring == "bilstm"):
+        model = model_sources['bilstm'](embeddings, modelconfig, class_num=config["Network Structure"]["output_dimensions"])    
+    
+    elif(modelstring == "bow"):
+        model = [] #obtain bow as model-like
+    
+    else:
+        raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
 
+    #Ensemble results loop
     results = []
-
     for i in range(ensemble_size):
         
         if args.train:
@@ -109,6 +119,8 @@ def main():
     
     displayResults()
 
+
+#Checks for the three required arguments - train or test, manually specify config, and config path.
 def handleArguments():
 
      # check parsed arguements (as found in coursework pdf)
@@ -120,7 +132,9 @@ def handleArguments():
         # file arguements
         args = parser.parse_args()
         return args
-                
+
+
+#Attempts to parse provided file as config.                
 def readConfig(configFile):
 
     # load config file (as found in coursework pdf)
@@ -130,6 +144,7 @@ def readConfig(configFile):
 
     return config
 
+#Write back to a config file with data.
 def writeConfig(configFile, data):
 
     config = configparser.ConfigParser()
@@ -148,18 +163,7 @@ def loadData(directory):
     return data
 
 
-
-def load_file(path):
-    quest_text = ''
-    question = codecs.open(path, 'r', encoding = 'ISO-8859-1')
-    question_lines = question.readlines()
-    for line in question_lines:
-        quest_text = quest_text + line
-    question.close()
-    return quest_text
-
-
-#Split the data into tokens.
+#Split the data into tokens. Returns tokenised text strings, and dict of unique words.
 def tokeniseData(data,stopwords):
     text = data
     stopWords = stopwords
@@ -216,7 +220,8 @@ def tokeniseData(data,stopwords):
     
     return documents, uniqueWords
 
-#Removes stopwords, lemma-izes, etc. according to config-specified rules.
+
+#Splits data into strings, and their respective labels.
 def preprocessData(data):
 
     text, targets = [], []
@@ -229,7 +234,7 @@ def preprocessData(data):
     return [text, targets]
     
     
-#Uses either random, or pre-trained method to generate vector of word embeddings.
+#Container for link to embedding.py's embedding methods. Returns embeddings, and vocab list.
 def generateWordEmbeddings(data, config):
     
     return embedding_main(data, config)
@@ -254,18 +259,6 @@ def encodeData(lemmadata, vocabulary):
         
     return encoded
 
-#Calls external model (as specified by config) with data, recieves returned data, saves results.   
-def trainModel(data):
-
-    model = model_sources['bilstm']()
-    return ffnn_trainModel(data, model)
-    
-#Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
-def testModel(data):
-    
-    return testModel()
-    
-    
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
 def classifyModelOutput():
     print("Debug!")
@@ -277,7 +270,6 @@ def aggregateResults():
     
 def displayResults():
     print("Debug!")
-
 
 if __name__ == "__main__":
     
