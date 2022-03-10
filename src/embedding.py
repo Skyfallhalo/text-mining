@@ -64,7 +64,6 @@ def main(vocab_list,config):
                     if glove_word == vocab_list[i]:
                         idx = i
                         break
-                # if idx != -1 or glove_word == "#unk#":
                 if idx != -1:
                     trimmed_vocab_list.append(glove_word)
                     vec = list(map(lambda x: float(x), vec_str.strip().split(" ")))

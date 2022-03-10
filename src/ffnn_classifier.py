@@ -17,7 +17,7 @@ import numpy as np
 import torch   
 from torch.utils.data import Dataset, DataLoader
 
-import torchtext   
+# import torchtext
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -26,17 +26,6 @@ import torch.optim as optim
 
 #inference 
 #import spacy
-
-class LateDataset(Dataset):
-    def __init__(self, text, label):
-        self.text = text
-        self.label = label
-        
-    def __len__(self):
-        return len(self.label)
-    
-    def __getitem__(self, idx):
-        return torch.from_numpy(self.text[idx][0].astype(np.int32)), self.label[idx], self.text[idx][1]
 
 #Accuracy Metric
 def binary_accuracy(preds, y):
@@ -49,22 +38,16 @@ def binary_accuracy(preds, y):
     
 def prepare_sequence(seq, to_ix):
     idxs = [to_ix[w] for w in seq]
-    return torch.tensor(idxs, dtype=torch.long)    
+    return torch.tensor(idxs, dtype=torch.long)
 
-def trainModel(data, labels, model):
+def trainModel(data_train, data_dev, model, numEpochs=10, lr=0.1):
            
-    batchSize = 128  
-    numEpochs = 10
-    bestLoss = float('inf')       
-    
-    #Data Preparation
-    data = [np.array(x) for x in data]
-    dataset = LateDataset(data, labels)
-    data_train = DataLoader(dataset = dataset, batch_size = batchSize, shuffle =False)
+    bestLoss = float('inf')
     
     #Define the Optim. (Stochastic G.D.) and Loss metric
-    optimiser = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-    criterion = nn.BCELoss()    
+    # optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    optimiser = optim.SGD(model.parameters(), lr=lr)
+    criterion = nn.BCELoss()
 
     #CUDA
     #Cuda algorithms
@@ -78,7 +61,7 @@ def trainModel(data, labels, model):
      
     for epoch in range(numEpochs):
 
-        for x, y, l in data_train:
+        for x, y in data_train:
             
             model.zero_grad()
          

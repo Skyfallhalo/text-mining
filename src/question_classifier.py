@@ -23,8 +23,10 @@
 import argparse
 import configparser
 
-import codecs
+import random
 import re
+from collections import Counter
+
 import numpy
 import numpy as np
 
@@ -32,89 +34,154 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from sklearn.metrics import classification_report
+from torch.utils.data import DataLoader, Dataset
 
 from bow import main as bow_main
 from bilstm import main as bilstm_main
 
 from embedding import main as embedding_main
 
-from ffnn_classifier import trainModel as ffnn_trainModel
-from ffnn_classifier import testModel as ffnn_testModel
+from ffnn_classifier_bkp import trainModel as ffnn_trainModel
+from ffnn_classifier_bkp import testModel as ffnn_testModel
+
 
 #Basic Structual Definitions
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 
+#Set random seeds
+torch.manual_seed(1)
+random.seed(1)
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 def main():
-    
+
     #Read Arguments, Config Files
     args = handleArguments()
     config = readConfig(args.config)
-     
-    stopWords = loadData(config["Paths"]["stop_words"])
-    ensemble_size = int(config["Model"]["ensemble_size"]) 
 
-    #Retrieve 
+    stopWords = loadData(config["Paths"]["stop_words"])
+    ensemble_size = int(config["Model"]["ensemble_size"])
+
+    #Retrieve
     if args.train:
 
-        dataDir = config["Paths"]["path_train"]
-        devDir = config["Paths"]["path_dev"]
-        
-        dev = loadData(devDir)
+        #Load data from file
+        trainData = loadData(config["Paths"]["path_train"])
+        devData = loadData(config["Paths"]["path_dev"])
 
-        #Preprocess data (stopwords, lemmatising)
-        text, targets = preprocessData(dev)         
-        
-        #Tokensive and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-        lemmadata, tokens = tokeniseData(text, stopWords)        
-        
-    elif args.test:
+        data = trainData + devData
 
-        dataDir = config["Paths"]["path_train"]
+        #Preprocess data: splits strings into lists of their labels and text.
+        text, targets = preprocessData(data)
 
-    #Load data from file
-    data = loadData(dataDir)
+        #Tokenise: Takes raw texts, returns their lemma form and a unique token list
+        lemmadata, tokens = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
 
-    #Preprocess data: splits strings into lists of their labels and text.
-    text, targets = preprocessData(data)     
-    
-    #Tokenise: Takes raw texts, returns their lemma form and a unique token list
-    lemmadata, tokens = tokeniseData(text, stopWords)        
+        #Embed: Convert unique token list into word embeddings.
+        embeddings, vocabulary = generateWordEmbeddings(tokens, config)
 
-    #Embed: Convert unique token list into word embeddings.
-    embeddings, vocabulary = generateWordEmbeddings(tokens, config)
+        #Encode: Convert data into numerical equivalents
+        encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
 
-    #Encode: Convert data into numerical equivalents
-    encodeddata = encodeData(lemmadata, vocabulary)
+        #Get the list of unique classes of questions, the length of classes is supposed to be 50
+        classes = list(set(targets))
+        classes.sort()
+        indexed_targets = [classes.index(x) for x in targets]
 
-    #Construct model
-    modelstring = config["Model"]["model"]
-    modelconfig = readConfig(config["Paths"][modelstring+"_config"])
-    
-    if modelstring == "bilstm" or modelstring == "bow":
-        model = model_sources[modelstring](embeddings, modelconfig, )
-    
-    else:
-        raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
+        #Construct model
+        modelstring = config["Model"]["model"]
+        modelconfig = readConfig(config["Paths"][modelstring+"_config"])
 
-    #Ensemble results loop
-    results = []
-    for i in range(ensemble_size):
-        
-        if args.train:
+        if modelstring == "bilstm" or modelstring == "bow":
+            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+            model.to(device)
+
+        else:
+            raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
+
+        #Split training and development data and generate data loaders
+        X_train = encodeddata[:len(trainData)]
+        X_dev = encodeddata[len(trainData):]
+        y_train = indexed_targets[:len(trainData)]
+        y_dev = indexed_targets[len(trainData):]
+        train_ds = LateDataset(X_train, y_train)
+        dev_ds = LateDataset(X_dev, y_dev)
+        batch_size = int(config["Network Structure"]["batch_size"])
+        train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+        dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+
+        #Ensemble results loop
+        for i in range(ensemble_size):
+
             #Train selected model (BOW or BiLSTM) if "train" arg specified
-            results.append(ffnn_trainModel(encodeddata, targets, model))
+            model = ffnn_trainModel(train_dl, dev_dl, model,
+                                    numEpochs=int(config["Model Settings"]["epoch"]),
+                                    lr=float(config["Hyperparameters"]["lr_param"]))
 
-        elif args.test:
+            torch.save({
+                "model_state_dict": model.state_dict()
+            }, "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
+
+        torch.save({
+            "word_embedding_state_dict": embeddings.state_dict(),
+            "vocab_list": vocabulary,
+            "classes": classes
+        }, config["Paths"]["path_cache"])
+
+    elif args.test:
+        #Load data from checkpoint
+        checkpoint = torch.load(config["Paths"]["path_cache"])
+
+        vocabulary = checkpoint["vocab_list"]
+        classes = checkpoint["classes"]
+
+        embeddings = nn.Embedding(checkpoint["word_embedding_state_dict"]["weight"].size(dim=0),
+                                  checkpoint["word_embedding_state_dict"]["weight"].size(dim=1))
+        embeddings.load_state_dict(checkpoint["word_embedding_state_dict"])
+
+        testData = loadData(config["Paths"]["path_test"])
+
+        # Preprocess data: splits strings into lists of their labels and text.
+        text, targets = preprocessData(testData)
+
+        # Tokenise: Takes raw texts, returns their lemma form and a unique token list
+        lemmadata, _ = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
+
+        # Encode: Convert data into numerical equivalents
+        encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
+
+        indexed_targets = [classes.index(x) for x in targets]
+
+        X_test = torch.LongTensor(encodeddata[:len(testData)])
+        y_test = torch.LongTensor(indexed_targets[:len(testData)])
+
+        results = []
+
+        for i in range(ensemble_size):
+
+            checkpoint = torch.load(
+                "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
+
+            # Construct model
+            modelstring = config["Model"]["model"]
+            modelconfig = readConfig(config["Paths"][modelstring + "_config"])
+
+            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.to(device)
+
             #Test selected model (BOW or BiLSTM) if "test" arg specified
-
-            testModel()
+            results.append(ffnn_testModel(X_test, y_test, model))
 
             #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-            results.append(classifyModelOutput())
-            
-    aggregateResults(results)
-    
-    displayResults()
+            results.append(classifyModelOutput(results, y_test, classes))
+
+        aggregateResults()
+
+        displayResults()
 
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
@@ -131,7 +198,7 @@ def handleArguments():
         return args
 
 
-#Attempts to parse provided file as config.                
+#Attempts to parse provided file as config.
 def readConfig(configFile):
 
     # load config file (as found in coursework pdf)
@@ -145,130 +212,137 @@ def readConfig(configFile):
 def writeConfig(configFile, data):
 
     config = configparser.ConfigParser()
-    
+
     with open(configFile, 'w') as file:
         config.write(file)
 
 
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
-
-    with open(directory, "r", encoding = 'latin-1') as f: # get data
-        data = f.readlines()
-        data = [line[:-1] for line in data]
+    data = []
+    with open(directory, "r") as f:# get data
+        for line in f:
+            data.append(line.strip())
 
     return data
 
 
 #Split the data into tokens. Returns tokenised text strings, and dict of unique words.
-def tokeniseData(data,stopwords):
+def tokeniseData(data, stopwords, min_occurence):
     text = data
     stopWords = stopwords
     #text = text.split("\n")
-    text = text[:-1]
     #stopWords = stopWords.split("\n")
-    
-    
+
+
     documents = []
     for sen in text:
         # Remove all the special characters
         document = re.sub(r'\W', ' ', sen)
-        
+
         # Converting to Lowercase
         document = document.lower()
         document = document.split()
-        
-        i = 0
-        for word in document:
-            if word in stopWords:
-                temp = document[1:]
-                for i in range(len(temp)):
-                    if temp[i] == word:
-                        temp[i]=""
-                        i+=1
-                document = temp
-                
-        document = list(filter(None, document))
+
+        document = list(filter(lambda x: x not in stopWords, document))
         documents.append(document)
-    
-    
-    listofWords=""
+
+    dictionary = {}
     for doc in documents:
         for word in doc:
-            listofWords = listofWords + " " + word
-            
-    dictionary = {}
-    tempList = listofWords.split()
-    for item in tempList:
-        #print(item)
-        if item in dictionary:
-            dictionary[item] += 1
-        else:
-            dictionary.update({item: 1})
-          
-        
-    k = 0
-    newDict = {}
-    uniqueWords=[]
-    for (key,value) in dictionary.items():
-        if value>k:
-            newDict[key] = value
+            if word not in dictionary:
+                dictionary[word] = 0
+            dictionary[word] += 1
+
+    uniqueWords = []
+    for key, value in dictionary.items():
+        if value > min_occurence:
             uniqueWords.append(key)
-    
-    return documents, uniqueWords
+
+    return documents, ["", "#unk#"] + uniqueWords
 
 
 #Splits data into strings, and their respective labels.
 def preprocessData(data):
 
     text, targets = [], []
-    
+
     for line in data:
         delimline = line.split(" ", 1)
         text.append(delimline[1])
-        targets.append(delimline[0])    
-    
-    return [text, targets]
-    
-    
+        targets.append(delimline[0])
+
+    return text, targets
+
+
 #Container for link to embedding.py's embedding methods. Returns embeddings, and vocab list.
 def generateWordEmbeddings(data, config):
-    
+
     return embedding_main(data, config)
-    
+
 #Converts data into their indexes of their vocabulary, and pads if appropriate.
-def encodeData(lemmadata, vocabulary):    
-    
+def encodeData(lemmadata, vocabulary, padlength):
+
     encoded = []
     #The length we pad each encoded string to. Length of biggest instance *1.5.
-    padlength = int(max([len(i) for i in lemmadata])*1.5) #Chosen arbitrarily.
-    
+    # padlength = int(max([len(i) for i in lemmadata])*1.5) #Chosen arbitrarily.
+
+    unk_idx = vocabulary.index("#unk#")
     for sent in lemmadata:
-        encode = []
-        for word in sent:
+        encode = [0] * padlength
+        for i in range(len(sent)):
+            if i == padlength:
+                break
+            word = sent[i]
             if word in vocabulary:
-                encode.append(int(vocabulary.index(word)))
+                encode[i] = vocabulary.index(word)
             else:
-                encode.append(int(len(vocabulary)-1))
-        
+                encode[i] = unk_idx
+
         encode += [0] * (padlength - len(encode))
-        encoded.append(encode) 
-        
+        encoded.append(encode)
+
     return encoded
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
-def classifyModelOutput():
-    print("Debug!")
-    
-    
+def classifyModelOutput(results, y, classes):
+    results = torch.stack(results)
+    #Get the maximum occurrence of label in the outcome of each test sentence
+    y_pred, _ = torch.mode(results, 0)
+
+    # y = y.cpu()
+    # y_pred = y_pred.cpu()
+    idx_list = torch.ones(len(classes))
+    for n in y.unique():
+        idx_list[n.item()] = 0
+    for n in y_pred.unique():
+        idx_list[n.item()] = 0
+    target_names = classes.copy()
+    for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
+        del target_names[i]
+    print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
+
+
 def aggregateResults():
     print("Debug!")
-   
-    
+
+
 def displayResults():
     print("Debug!")
 
+
+class LateDataset(Dataset):
+    def __init__(self, text, label):
+        self.text = text
+        self.label = label
+
+    def __len__(self):
+        return len(self.label)
+
+    def __getitem__(self, idx):
+        return torch.tensor(self.text[idx], dtype=torch.int32), self.label[idx]
+
 if __name__ == "__main__":
-    
+
     main()
     exit()

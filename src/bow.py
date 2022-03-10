@@ -7,34 +7,35 @@
 #   base file for the 'bow' model, used by question_classifier.py.
 #
 #//////////////////////////////////////////////////////////
-
-import sys
-
-def main(data, vectorisedWords):
-
-    sentenceVectors = [] # finish list of bag of words sentence vectors
-
-    for sentence in data: 
-        
-        # vec_bow(s) = 1/length(s) sum for all words in sentence vec(w)
-
-        length = len(sentence) # number of words
-        sentenceVector = 0 # for sum of word vectors
-
-        for word in sentence:
-
-            vector = [i for i, v in enumerate(vectorisedWords) if v[0] == word] # find vector for given word in sentence
-            sentenceVector += vector 
-
-        sentenceVectors.append(sentenceVector/length)
-
-    return sentenceVectors
-    
-#Input: Config directory passed from question_classifier.py
-#Task: Populate config values by reading config.ini
-#Output: config.
-def readConfig(configFile): 
+import torch
+from torch import nn
 
 
-    print("Debug")    
-    
+class BOW(nn.Module):
+    def __init__(self, embedding, class_num):
+        super(BOW, self).__init__()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        self.embedding = embedding
+
+        self.fc = nn.Linear(embedding.weight.size(dim=1), class_num)
+
+    def forward(self, seq):
+        # seq = self.embedding(seq).to(self.device)
+        sentence_vectors = []  # finish list of bag of words sentence vectors
+
+        for sentence in seq:
+            nonzero_sentence = sentence[torch.nonzero(sentence).squeeze()]
+            middle = self.embedding(nonzero_sentence)
+            if middle.dim() == 1:
+                middle = torch.unsqueeze(middle, 0)
+            middle = middle.sum(dim=0)
+            sentence_vectors.append(middle)
+
+        out = torch.stack(sentence_vectors)
+        out = self.fc(out)
+        return out
+
+
+def main(embedding, config, class_num):
+    return BOW(embedding, class_num)
