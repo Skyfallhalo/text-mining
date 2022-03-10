@@ -81,7 +81,7 @@ def main():
     lemmadata, tokens = tokeniseData(text, stopWords)        
 
     #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-    vocabulary, embeddings = generateWordEmbeddings(tokens, config)
+    embeddings, vocabulary = generateWordEmbeddings(tokens, config)
 
     encodeddata = encodeData(lemmadata, vocabulary)
 
@@ -231,14 +231,7 @@ def preprocessData(data):
 #Uses either random, or pre-trained method to generate vector of word embeddings.
 def generateWordEmbeddings(data, config):
     
-    text, targets = [], []
-
-    if(config["Embeddings"]["use_pretrained"]):
-        vocab = config["Embeddings"]["path_vocabulary"]
-        emb = config["Embeddings"]["path_pretrained"]
-        return new_pretrained_embedding(vocab, emb)
-    else:
-        return random_embedding(data)
+    return embedding_main(data, config)
     
 #Converts data into their indexes of their vocabulary, and pads if appropriate.
 def encodeData(lemmadata, vocabulary):    
