@@ -18,6 +18,8 @@
 #//////////////////////////////////////////////////////////
 
 #Library Imports
+from sklearn import model_selection
+from sklearn.metrics import accuracy_score
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,23 +30,21 @@ import argparse
 from bow import main as bow_main
 from bilstm import main as bilstm_main
 from embedding import main as embedding_main
-from ffnn_classifier import main as ffnn_main
+import ffnn_classifier
 
 #Local Imports
 
 
 #Basic Structual Definitions
-model_sources = [['bow',bow_main], ['bilstm',bilstm_main]]
+model_sources = [('bow',bow_main), ('bilstm',bilstm_main)]
 
 def main():
-    
+
     #Read Arguments
     args = handleArguments()
     
     #Read Config Files 
-    config = readConfig()
-
-    #Retrieve 
+    config = readConfig(args.config)
     if args.train:
 
         dataDir = config["Paths"]["path_train"]
@@ -74,6 +74,10 @@ def main():
 
     ensemble_size = config["Model"]["ensemble_size"]
     
+    model_name = config["Model"]["model"]
+
+    model = [v for i, v in model_sources if i == 'bow'][0]
+
     word_embeddings = embedding_main(data)
 
     results = []
@@ -83,7 +87,7 @@ def main():
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
 
-            results.append(trainModel())
+            results.append(trainModel(model, word_embeddings, data))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -118,14 +122,6 @@ def readConfig(configFile):
 
     return config
 
-def writeConfig(configFile, data):
-
-    config = configparser.ConfigParser()
-    
-    with open(configFile, 'w') as file:
-        config.write(file)
-
-
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
 
@@ -158,14 +154,15 @@ def generateWordEmbeddings():
    
     
 #Calls external model (as specified by config) with data, recieves returned data, saves results.   
-def trainModel(data):
+def trainModel(model, word_embeddings, data):
 
-    for line in data:
-        line = line.split()
-    return data
+    ffnn_classifier.trainModel()
+
+    return accuracy_score
     
 #Attempts to run BOW or BiLSTM with data, recieves returned data, and saves results.    
 def testModel(data):
+
     print("Debug!")
     
     
