@@ -74,15 +74,16 @@ def main():
 
     data = loadData(dataDir)
 
-    #Preprocess data (stopwords, lemmatising)
+    #Preprocess data: splits strings into lists of their labels and text.
     text, targets = preprocessData(data)     
     
-    #Tokensive
+    #Tokenise: Takes raw texts, returns their lemma form and a unique token list
     lemmadata, tokens = tokeniseData(text, stopWords)        
 
-    #Gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
+    #Embed: Convert unique token list into word embeddings.
     embeddings, vocabulary = generateWordEmbeddings(tokens, config)
 
+    #Encode: Convert data into numerical equivalents
     encodeddata = encodeData(lemmadata, vocabulary)
 
     #Construct model (todo: select model)
@@ -94,7 +95,7 @@ def main():
         
         if args.train:
             #Train selected model (BOW or BiLSTM) if "train" arg specified
-            results.append(ffnn_trainModel(encodeddata, model))
+            results.append(ffnn_trainModel(encodeddata, targets, model))
 
         elif args.test:
             #Test selected model (BOW or BiLSTM) if "test" arg specified
@@ -244,9 +245,9 @@ def encodeData(lemmadata, vocabulary):
         encode = []
         for word in sent:
             if word in vocabulary:
-                encode.append(str(vocabulary.index(word)))
+                encode.append(int(vocabulary.index(word)))
             else:
-                encode.append(str(len(vocabulary)-1))
+                encode.append(int(len(vocabulary)-1))
         
         encode += [0] * (padlength - len(encode))
         encoded.append(encode) 
