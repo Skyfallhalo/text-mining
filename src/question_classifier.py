@@ -21,11 +21,10 @@
 
 #Library Imports
 import argparse
+import codecs
 import configparser
-
 import random
 import re
-from collections import Counter
 
 import numpy
 import numpy as np
@@ -37,14 +36,11 @@ import torch.optim as optim
 from sklearn.metrics import classification_report
 from torch.utils.data import DataLoader, Dataset
 
-from bow import main as bow_main
 from bilstm import main as bilstm_main
-
+from bow import main as bow_main
 from embedding import main as embedding_main
-
-from ffnn_classifier_bkp import trainModel as ffnn_trainModel
-from ffnn_classifier_bkp import testModel as ffnn_testModel
-
+from ffnn_classifier import testModel as ffnn_testModel
+from ffnn_classifier import trainModel as ffnn_trainModel
 
 #Basic Structual Definitions
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
