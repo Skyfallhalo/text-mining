@@ -9,223 +9,255 @@
 #
 #//////////////////////////////////////////////////////////
 
-def main(*args):
-    readConfig(args)
+#def main(*args):
+#    readConfig(args)
     
 #Input: Config directory passed from question_classifier.py
 #Task: Populate config values by reading config.ini
 #Output: config.
-def readConfig(configFile): 
-    print("Debug")    
+#def readConfig(configFile): 
+ #   print("Debug")    
     
+#if __name__ == "__main__":
+#    main(*sys.argv[1:])
+#    sys.exit(0)
+
+
+import torch
+import torch.nn as nn
+import sys
+
+def main(vocab_list,config):
+    """
+    return embedding result and vocabulary.
+    
+    For pre0trained embeddings:
+     Config file:
+       pre_emb : true
+       path_pre_emb: a path to the embedding txt file
+       emb_freeze: true or false
+     Attributes:
+       vocab_list: a list of all words from the training data.
+    
+    For random initialized embeddings:
+      Config file:
+        pre_emb : false
+        word_embedding_dim: choose a value between 100 ~ 300
+      Attributes:
+        vocab_list: a list of words from training data.
+    
+    Returns:
+      embedding: a nn.embedding variable
+      trimmed_vocab_list: a trimmed final vocab list
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    trimmed_vocab_list = []
+    if config["Using pre-trained Embeddings"].getboolean("pre_emb"):
+        vec_list = []
+        vec_size = 0
+        with open(config["Using pre-trained Embeddings"]["path_pre_emb"]) as f:
+            for line in f:
+                [glove_word, vec_str] = line.split("\t", 1)
+                glove_word = glove_word.strip().lower()
+                idx = -1
+                for i in range(len(vocab_list)):
+                    if glove_word == vocab_list[i]:
+                        idx = i
+                        break
+                # if idx != -1 or glove_word == "#unk#":
+                if idx != -1:
+                    trimmed_vocab_list.append(glove_word)
+                    vec = list(map(lambda x: float(x), vec_str.strip().split(" ")))
+                    if len(vec) > vec_size:
+                        vec_size = len(vec)
+                    vec_list.append(vec)
+                    del vocab_list[idx]
+        trimmed_vocab_list.insert(0, "")
+        vec_list.insert(0, [0.0] * vec_size)
+
+        # for e in vocab_list:
+        #     print(e)
+        # print(len(vocab_list))
+
+        weight = torch.FloatTensor(vec_list)
+        # embedding = nn.Embedding.from_pretrained(weight, freeze=freeze)
+        embedding = nn.Embedding.from_pretrained(weight)
+    else:
+       # trimmed_vocab_list = [""] + vocab_list
+       # embedding = nn.Embedding(len(trimmed_vocab_list), int(config["Network Structure"]["word_embedding_dim"]))
+
+#        if corpus is not None:
+#            vocabulary = {}
+#            for sentence in corpus:
+#                for token in sentence:
+#                    if token not in vocabulary:
+#                        vocabulary[token] = 1
+#                    else:
+#                        vocabulary[token] += 1
+
+#        trimmed_vocab_list = []
+#        for i in vocab_list:
+#            if min_count <= vocab_list[i]:
+#                trimmed_vocab_list.append(i)
+
+        vocab_list.insert(0,'')
+        trimmed_vocab_list = vocab_list
+
+        vocabulary_size = len(trimmed_vocab_list)
+        embedding = nn.Embedding(vocabulary_size, int(config["Network Structure"]["word_embedding_dim"]))
+
+#        else:
+#            sys.exit('No corpus to generate vocabulary and random embedding')
+        
+
+    embedding.to(device)
+    embedding.weight.requires_grad = not config["Using pre-trained Embeddings"].getboolean("emb_freeze")
+
+    return embedding, trimmed_vocab_list
+
+
+#def main(vocab_list, config):
+#    # readConfig(args)
+#    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#
+#    trimmed_vocab_list = []
+#    if config["Model"].getboolean("pre_emb"):
+#        vec_list = []
+#        vec_size = 0
+#        with open(config["Using pre-trained Embeddings"]["path_pre_emb"]) as f:
+#            for line in f:
+#                [glove_word, vec_str] = line.split("\t", 1)
+#                glove_word = glove_word.strip().lower()
+#                idx = -1
+#                for i in range(len(vocab_list)):
+#                    if glove_word == vocab_list[i]:
+#                        idx = i
+#                        break
+#                # if idx != -1 or glove_word == "#unk#":
+#                if idx != -1:
+#                    trimmed_vocab_list.append(glove_word)
+#                    vec = list(map(lambda x: float(x), vec_str.strip().split(" ")))
+#                    if len(vec) > vec_size:
+#                        vec_size = len(vec)
+#                    vec_list.append(vec)
+#                    del vocab_list[idx]
+#        trimmed_vocab_list.insert(0, "")
+#        vec_list.insert(0, [0.0] * vec_size)
+#
+#        # for e in vocab_list:
+#        #     print(e)
+#        # print(len(vocab_list))
+#
+#        weight = torch.FloatTensor(vec_list)
+#        # embedding = nn.Embedding.from_pretrained(weight, freeze=freeze)
+#        embedding = nn.Embedding.from_pretrained(weight)
+#    else:
+#        trimmed_vocab_list = [""] + vocab_list
+#        embedding = nn.Embedding(len(trimmed_vocab_list), int(config["Network Structure"]["word_embedding_dim"]))
+#
+#    embedding.to(device)
+#    embedding.weight.requires_grad = not config["Model"].getboolean("emb_freeze")
+#
+#    return embedding, trimmed_vocab_list
+
+
+
+
+
+#def main(config,corpus=None):
+#    """
+#    For use this module:
+#    1.add import sys
+#    2.add path_pre_emb_vocab in config
+#    3.
+#    """
+#    # readConfig(args)
+#    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#
+#    vocab_list = []
+#    if config["Model"].getboolean("pre_emb"):
+#        with open(config["Using pre-trained Embeddings"]["path_pre_emb"]) as f:
+#            vocab_list = f.read().split(',')
+#
+#        while '' in vocab_list:
+#            vocab_list.remove('')
+#        vocab_list.insert(0,'')
+#
+#        #load embedding vectors
+#        with open(config["Using pre-trained Embeddings"]["path_pre_emb_vocab"]) as my_file:
+#            content_list = my_file.read().split(';')
+#
+#
+#        vectors = []
+#        for vector in content_list:
+#            vec = []
+#            elements = vector.split(' ')
+#            for i in elements:
+#                if '[' in i:
+#                    i = i.replace('[', '')
+#                if ']' in i:
+#                    i = i.replace(']', '')
+#                if '\n' in i:
+#                    i = i.replace('\n', '')
+#                if i != '':
+#                    vec.append(float(i))
+#            vectors.append(vec)
+#
+#        vectors.remove([])
+#        vecs = np.array(vectors)
+#        a = np.zeros((1,vecs.shape[1]))
+#        vecs2 = np.concatenate((a,vecs))
+#
+#        weights = torch.FloatTensor(vecs2)
+#        embedding = nn.Embedding.from_pretrained(weights,freeze=freeze)
+#
+#
+#
+#    else:
+#        if corpus is not None:
+#            vocabulary = {}
+#            for sentence in corpus:
+#                for token in sentence:
+#                    if token not in vocabulary:
+#                        vocabulary[token] = 1
+#                    else:
+#                        vocabulary[token] += 1
+#
+#
+#            vocab_list = []
+#            for i in vocabulary:
+#                if min_count <= vocabulary[i]:
+#                    vocab_list.append(i)
+#
+#            vocab_list.append('UNK')
+#            vocab_list.insert(0,'')
+#
+#            vocabulary_size = len(vocab_list)
+#            embedding = nn.Embedding(vocabulary_size, vector_size)
+#
+#        else:
+#            sys.exit('No corpus to generate vocabulary and random embedding')
+#
+#
+#    embedding.to(device)
+#    embedding.weight.requires_grad = not config["Model"].getboolean("emb_freeze")
+#
+#    return embedding, vocab_list
+
+
+# Input: Config directory passed from question_classifier.py
+# Task: Populate config values by reading config.ini
+# Output: config.
+#def readConfig(configFile):
+#    print("Debug")    
+
+
 if __name__ == "__main__":
-    main(*sys.argv[1:])
-    sys.exit(0)
-
-import numpy as np
-import torch
-from torch.autograd import Variable
-import torch.nn.functional as F
-import torch
-import time
-
-
-class pretrained_embedding:
-    
-    def __init__(self, corpus, min_count=3,max_count=20,window_size=2,vector_size=10):
-        self.corpus = corpus
-        self.max_count = max_count
-        self.min_count = min_count
-        self.window_size = window_size
-        self.vector_size  = vector_size
-        self.preparation()
-        
-    def preparation(self):
-
-        """
-        create a initial vocabulary with each word's frequency
-        Attributes: corpus, 
-        """
-        # create the vocabulary with each word's frequency
-        vocabulary = {}
-        for sentence in self.corpus:
-            for token in sentence:
-                if token not in vocabulary:
-                    vocabulary[token] = 1
-                else:
-                    vocabulary[token] += 1
-
-        # word2idx = {w: idx for (idx, w) in enumerate(vocabulary)}
-        # idx2word = {idx: w for (idx, w) in enumerate(vocabulary)}
+    # main(*sys.argv[1:])
+    # sys.exit(0)
+    main()
 
 
 
-        """
-        construct the real dictionay based on frequency.
-        remove those most frequency words and those most unfrequency words.
-        And add a new category for them: UNK
-
-        Attributes: min_count, max_count, vocabulary_size, word2idx, idx2word
-
-        """
-        real_dic = {}
-        for i in vocabulary:
-            if self.min_count <= vocabulary[i] <= self.max_count:
-                real_dic[i] = vocabulary[i]
-
-        l = sorted(real_dic.items(), key = lambda i: i[1],reverse=True) 
 
 
-        self.vocabulary_size = len(l)+1
-        self.word2idx = {w[0]: idx+1 for (idx, w) in enumerate(l)}
-        self.idx2word = {idx+1: w[0] for (idx, w) in enumerate(l)}
-        self.word2idx['UNK'] = 0
-        self.idx2word[0] = 'UNK'
-
-
-        """
-        construct the word pairs with required window size.
-        Note that we would ignore all paires with removed words.
-
-        Attributes: corpus, window_size
-        """
-
-        idx_pairs = []
-        # for each sentence
-        for sentence in self.corpus:
-
-            indices = []
-            for word in sentence:
-                if word in self.word2idx.keys():
-                    indices.append(self.word2idx[word])
-                else:
-                    indices.append(0)
-
-            # for each word, threated as center word
-            for center_word_pos in range(len(indices)):
-                # for each window position
-                for w in range(-self.window_size, self.window_size + 1):
-                    context_word_pos = center_word_pos + w
-                    # make soure not jump out sentence
-                    if context_word_pos < 0 or context_word_pos >= len(indices) or center_word_pos == context_word_pos:
-                        continue
-                    context_word_idx = indices[context_word_pos]
-                    idx_pairs.append((indices[center_word_pos], context_word_idx))
-            
-            #remove all pairs with 0 values
-            self.new_idx_pairs = []
-            for i in idx_pairs:
-                if i[0] == 0 or i[1] == 0:
-                    pass
-                else: 
-                    self.new_idx_pairs.append(i)
-                    
-            # numpy array helps to accelerate the training
-            self.new_idx_pairs = np.array(self.new_idx_pairs)  
-
-
-
-    def get_input_layer(self,word_idx):
-        """
-        methods for construct input layers.
-        For each word it will generate a one-hot encoding format
-        
-        Attributes: vocabulary_size
-        """
-
-        x = torch.zeros(self.vocabulary_size).float()
-        x[word_idx] = 1.0
-        return x
-
-    def train(self, epochs=5, lr=0.001):
-        """
-        initialize the weight matrix and other stuff for layers.
-
-        Attributes: vector_size, epochs
-        """
-        
-        embedding_dims = self.vector_size
-        W1 = Variable(torch.randn(embedding_dims, self.vocabulary_size).float(), requires_grad=True)
-        W2 = Variable(torch.randn(self.vocabulary_size, embedding_dims).float(), requires_grad=True)
-        num_epochs = epochs
-        learning_rate = lr
-
-        import torch.optim as optim
-        # optimizer = optim.SGD([{'params':W1},{'params':W2}],lr = 0.01, momentum = 0.9)
-        optimizer = optim.Adam([W1, W2], lr=learning_rate)
-
-        """
-        train the model with required epoches for all data pairs.
-        Note that there are quite a lot lines for testing time and is commented afterwards.
-        
-        Attributes: epochs, new_idx_pairs, get_input_layer(),
-        """
-        start_time = time.time()
-        for epo in range(num_epochs):
-            loss_val = 0
-            for data, target in self.new_idx_pairs:
-                x = Variable(self.get_input_layer(data)).float()
-                y_true = Variable(torch.from_numpy(np.array([target])).long())
-        #         a_time = time.time()
-        #         print('create variable time: ', a_time - start_time)
-
-                z1 = torch.matmul(W1, x)
-                z2 = torch.matmul(W2, z1)
-                log_softmax = F.log_softmax(z2, dim=0)
-        #         b_time = time.time()
-        #         print('multi time: ' ,b_time - a_time)
-
-
-                loss = F.nll_loss(log_softmax.view(1,-1), y_true)
-                loss_val += loss.item()
-                loss.backward()
-        #         c_time = time.time()
-        #         print('loss backward time: ' ,c_time -b_time)
-
-        #         W1.data -= learning_rate * W1.grad.data
-        #         W2.data -= learning_rate * W2.grad.data
-
-        #         W1.grad.data.zero_()
-        #         W2.grad.data.zero_()
-
-                optimizer.step()
-                optimizer.zero_grad()
-        #         d_time = time.time()
-        #         print('update time: ' ,d_time-c_time)
-
-        #     if epo % 10 == 0:    
-            print(f'Loss at epo {epo}: {loss_val/len(self.new_idx_pairs)}')
-            print('time: ', time.time()-start_time)
-        self.W2 = W2
-    
-    def get_embedding(self):
-        return self.W2
-    
-    def length(self, tensor):
-        """
-        For self use only. should not be called from outside.
-        """
-        return np.sqrt(sum(np.square(tensor.detach().numpy())))
-
-    def similar(self,word):
-        results = []
-        aim = self.W2[self.word2idx[word]]
-        length_aim = self.length(aim)
-        for i in range(len(self.W2)):
-            upper = sum((self.W2[i] * aim).detach().numpy())
-        #     print('upper:', upper)
-            down = length_aim * self.length(self.W2[i])
-        #     print('down: ', down)
-            if down == 0:
-                result = 1
-            else:
-                result = upper/down
-            results.append(-result)
-
-        index = np.argsort(results)
-        for i in range(60):
-            print(self.idx2word[index[i]])
-
-
-
-    
