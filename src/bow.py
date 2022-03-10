@@ -15,34 +15,40 @@ from torch.autograd import Variable
 
 class BOWClassifier(nn.Module):
 
-    def __init__(self, data_size, embedding_size):
+    def __init__(self, embedding, hidden_dim, num_layers):
 
         super(BOWClassifier, self).__init__()
-        self.lin = nn.Linear(data_size, embedding_size)
+        
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.embedding = embedding
 
-    def forward(self, x):
+        self.fc_hidden = nn.Linear(hidden_dim,hidden_dim)
+        self.bn_hidden = nn.BatchNorm1d(hidden_dim)
+        self.dropout = torch.nn.Dropout(p=0.5)
 
-        return F.softmax(self.lin(x))
+        self.fc_output = nn.Linear(hidden_dim, 1)
+        
+        self.loss = nn.BCEWithLogitsLoss()
 
-def make_bow_vector(sentence, embedding):
-    # create a vector of zeros of vocab size = len(word_to_idx)
-    vec = torch.zeros(len(embedding))
+    def forward(self, x,target):
 
-    for word in sentence:
+        bow_embedding = []
+        for i in range(len(x)):
+            lookup_tensor = Variable(torch.LongTensor(x[i])).cuda()
+            embed = self.embedding(lookup_tensor)
+            embed = embed.mean(dim=0)
+            bow_embedding.append(embed)
+        bow_embedding = torch.stack(bow_embedding)
+    
+        h = self.dropout(F.relu(self.bn_hidden(self.fc_hidden(bow_embedding))))
+        h = self.fc_output(h)
+    
+        return self.loss(h[:,0],target), h[:,0]
 
-        vec[embedding[word]]+=1
 
-    return vec.view(1, -1)
+def main(embedding, config, embedding_size):
 
-def make_target(label, embedding):
-
-    return torch.LongTensor([embedding[label]])
-
-
-
-def main(data_size, embedding_size):
-
-    return BOWClassifier(data_size, embedding_size)
+    return BOWClassifier(embedding, int(config["Arguments"]["hidden_dim"]), int(config["Arguments"]["num_layers"]))
     
 #Input: Config directory passed from question_classifier.py
 #Task: Populate config values by reading config.ini
