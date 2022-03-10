@@ -90,11 +90,8 @@ def main():
     modelstring = config["Model"]["model"]
     modelconfig = readConfig(config["Paths"][modelstring+"_config"])
     
-    if(modelstring == "bilstm"):
-        model = model_sources['bilstm'](embeddings, modelconfig, class_num=config["Network Structure"]["output_dimensions"])    
-    
-    elif(modelstring == "bow"):
-        model = [] #obtain bow as model-like
+    if modelstring == "bilstm" or modelstring == "bow":
+        model = model_sources[modelstring](embeddings, modelconfig, )
     
     else:
         raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
