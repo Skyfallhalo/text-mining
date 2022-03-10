@@ -51,12 +51,21 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def main():
+    # ensemble randomly select data from whole training dataset (What's the point of splitting train and dev)
+    # position of softmax
+    # early stopping
+    # validation of combination
+    # ensemble: model + num ?     single => .0?
+    # ensemble extra info classes stopwords etc
+    # accuracy higher after shuffle data randomly
 
     # Read Arguments
     args = handle_arguments()
 
     # Read Config Files
     config = read_config(args.config)
+
+    ensemble_size = int(config["Model"]["ensemble_size"])
 
     # Retrieve
     if args.train:
@@ -67,41 +76,54 @@ def main():
         # Tokenize and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
         vocab_list = tokenise_data(data, stop_words)
 
-        # # Preprocess data (stopwords, lemmatising)
-        # vocab_list, vec_list = preprocess_data(vocab_list)
-
         word_embedding, vocab_list = embedding_main(vocab_list, config)
 
         encode_data, labels = encode_sentence(data, vocab_list, stop_words, int(config["Model"]["sentence_max_length"]))
         classes = list(set(labels))
         classes.sort()
-        dataset = QuestionDataset(encode_data, [classes.index(x) for x in labels])
-        train_ds, val_ds = random_split(dataset, [len(data) - int(len(data) * 0.1), int(len(data) * 0.1)])
-        batch_size = int(config["Network Structure"]["batch_size"])
-        train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-        val_dl = DataLoader(val_ds, batch_size=batch_size)
+        indexed_label = [classes.index(x) for x in labels]
 
-        model_fn = model_dict[config["Model"]["model"]]
-        model = model_fn(word_embedding, read_config(config["Paths"]["%s_config" % (config["Model"]["model"])]), len(classes))
-        model.to(device)
+        for i in range(ensemble_size):
+            # Train selected model (BOW or BiLSTM) if "train" arg specified
+            # sub_idx = np.random.choice(range(len(encode_data)), size=int(len(encode_data) / ensemble_size))
+            # print(len(sub_idx))
+            # X_sub = [encode_data[i] for i in sub_idx]
+            # y_sub = [indexed_label[i] for i in sub_idx]
 
-        model, optimiser = train_model(model, train_dl, val_dl,
-                                       epochs=int(config["Model Settings"]["epoch"]),
-                                       lr=float(config["Hyperparameters"]["lr_param"]),
-                                       opt_fn=torch.optim.SGD,
-                                       loss_fn=F.cross_entropy)
+            X_sub = encode_data
+            y_sub = indexed_label
+
+            dataset = QuestionDataset(X_sub, y_sub)
+            train_ds, val_ds = random_split(dataset, [len(X_sub) - int(len(X_sub) * 0.1), int(len(X_sub) * 0.1)])
+            batch_size = int(config["Network Structure"]["batch_size"])
+            train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+            val_dl = DataLoader(val_ds, batch_size=batch_size)
+
+            model_fn = model_dict[config["Model"]["model"]]
+            model = model_fn(word_embedding, read_config(config["Paths"]["%s_config" % (config["Model"]["model"])]),
+                             len(classes))
+            model.to(device)
+
+            model, optimiser = train_model(model, train_dl, val_dl,
+                                           epochs=int(config["Model Settings"]["epoch"]),
+                                           lr=float(config["Hyperparameters"]["lr_param"]),
+                                           opt_fn=torch.optim.SGD,
+                                           loss_fn=F.cross_entropy)
+
+            torch.save({
+                "model_state_dict": model.state_dict(),
+                # "optimizer_state_dict": optimiser.state_dict()
+            }, "{0}model.{1}.{2}.pt".format(config["Model"]["path_model"], config["Model"]["model"], i))
 
         torch.save({
-            "model_state_dict": model.state_dict(),
-            # "optimizer_state_dict": optimiser.state_dict(),
             "word_embedding_state_dict": word_embedding.state_dict(),
             "stop_words": stop_words,
             "vocab_list": vocab_list,
             "classes": classes
-        }, config["Model"]["path_model"])
+        }, config["Model"]["path_cache"])
 
     elif args.test:
-        checkpoint = torch.load(config["Model"]["path_model"])
+        checkpoint = torch.load(config["Model"]["path_cache"])
 
         stop_words = checkpoint["stop_words"]
         vocab_list = checkpoint["vocab_list"]
@@ -111,34 +133,41 @@ def main():
                                       checkpoint["word_embedding_state_dict"]["weight"].size(dim=1))
         word_embedding.load_state_dict(checkpoint["word_embedding_state_dict"])
 
-        model_fn = model_dict[config["Model"]["model"]]
-        model = model_fn(word_embedding, read_config(config["Paths"]["%s_config" % (config["Model"]["model"])]),
-                         len(classes))
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.to(device)
+        results = []
 
         test_data = load_data(config["Paths"]["path_test"])
         encode_data, labels = encode_sentence(test_data, vocab_list, stop_words, int(config["Model"]["sentence_max_length"]))
         # test_ds = QuestionDataset(encode_data, [classes.index(x) for x in labels])
         # test_dl = DataLoader(test_ds)
 
-        test_model(model, torch.LongTensor(encode_data), torch.LongTensor([classes.index(x) for x in labels]), classes)
+        indexed_label = torch.LongTensor([classes.index(x) for x in labels])
 
-    ensemble_size = int(config["Model"]["ensemble_size"])
+        for i in range(ensemble_size):
+            checkpoint = torch.load("{0}model.{1}.{2}.pt".format(config["Model"]["path_model"], config["Model"]["model"], i))
+            model_fn = model_dict[config["Model"]["model"]]
+            model = model_fn(word_embedding, read_config(config["Paths"]["%s_config" % (config["Model"]["model"])]),
+                             len(classes))
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.to(device)
 
-    results = []
+            results.append(test_model(model, torch.LongTensor(encode_data), indexed_label, classes))
 
-    # for i in range(ensemble_size):
-    #
-    #     if args.train:
-    #         # Train selected model (BOW or BiLSTM) if "train" arg specified
-    #         results.append(train_model())
-    #
-    #     elif args.test:
-    #         # Test selected model (BOW or BiLSTM) if "test" arg specified
-    #
-    #         # test_model(model, test_dl, classes)
-    #
+        y = indexed_label
+        results = torch.stack(results)
+        y_pred, _ = torch.mode(results, 0)
+
+        # y = y.cpu()
+        # y_pred = y_pred.cpu()
+        idx_list = torch.ones(len(classes))
+        for n in y.unique():
+            idx_list[n.item()] = 0
+        for n in y_pred.unique():
+            idx_list[n.item()] = 0
+        target_names = classes.copy()
+        for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
+            del target_names[i]
+        print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
+
     #         # Classify data (accuracy/F1 scores) produced by model if "test" arg specified
     #         results.append(classify_model_output())
 
@@ -204,40 +233,6 @@ def tokenise_data(data, stop_words):
     vocab_list.append("#unk#")
 
     return vocab_list
-
-
-# Removes stopwords, lemma-izes, etc. according to config-specified rules.
-def preprocess_data(vocab_list):
-    trimmed_vocab_list = []
-    vec_list = []
-    vec_size = 0
-    with open("../data/glove.txt") as f:
-        for line in f:
-            [glove_word, vec_str] = line.split("\t", 1)
-            glove_word = glove_word.strip().lower()
-            idx = -1
-            for i in range(len(vocab_list)):
-                if glove_word == vocab_list[i]:
-                    idx = i
-                    break
-            # if idx != -1 or glove_word == "#unk#":
-            if idx != -1:
-                trimmed_vocab_list.append(glove_word)
-                vec = list(map(lambda x: float(x), vec_str.strip().split(" ")))
-                if len(vec) > vec_size:
-                    vec_size = len(vec)
-                vec_list.append(vec)
-                del vocab_list[idx]
-    trimmed_vocab_list.insert(0, "")
-    vec_list.insert(0, [0.0] * vec_size)
-
-    return trimmed_vocab_list, vec_list
-
-
-# # Uses either random, or pre-trained method to generate vector of word embeddings.
-# def generate_word_embeddings():
-#
-#     return [('lorem', 1), ('ipsum', 0)]
 
 
 def encode_sentence(sentence_list, vocab_list, stop_words, max_len):
@@ -309,8 +304,11 @@ def train_model(model, train_dl, val_dl, epochs=10, lr=0.1, opt_fn=torch.optim.S
             total_val_loss += loss.item() * y_batch.shape[0]
             # _, y_pred = torch.max(y_out, 1)
             # print(y_out)
+            y_out = F.softmax(y_out, dim=1)
             y_pred = torch.max(y_out, 1)[1]
             correct += (y_pred == y_batch).sum().item()
+            # print("out")
+            # print(y_pred, y_batch)
             # print(y_pred)
             # print(y_batch)
             # print((y_pred == y_batch), (y_pred == y_batch).sum())
@@ -331,22 +329,13 @@ def test_model(model, x, y, classes):
     x = x.to(device)
     y = y.to(device)
     y_out = model(x)
+    y_out = F.softmax(y_out, dim=1)
     y_pred = torch.max(y_out, 1)[1]
     # correct = (y_pred == y).sum().item()
     # accuracy = correct / y_out.shape[0]
     # print(y)
     # print(y_pred)
-    y = y.cpu()
-    y_pred = y_pred.cpu()
-    idx_list = torch.ones(len(classes))
-    for n in y.unique():
-        idx_list[n.item()] = 0
-    for n in y_pred.unique():
-        idx_list[n.item()] = 0
-    target_names = classes.copy()
-    for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
-        del target_names[i]
-    print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
+    return y_pred
 
 
 # Attempts to run FF-NN with data, receives returned data, and saves results.
