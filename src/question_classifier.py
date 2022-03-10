@@ -51,14 +51,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 def main():
-    # ensemble randomly select data from whole training dataset (What's the point of splitting train and dev)
-    # position of softmax
-    # early stopping
-    # validation of combination
-    # ensemble: model + num ?     single => .0?
-    # ensemble extra info classes stopwords etc
-    # accuracy higher after shuffle data randomly
-
     # Read Arguments
     args = handle_arguments()
 
@@ -74,7 +66,7 @@ def main():
         stop_words = load_data(config["Paths"]["stop_words"])
 
         # Tokenize and gen. word embeddings (RandomInit, Pre-trained), if "train" arg specified
-        vocab_list = tokenise_data(data, stop_words)
+        vocab_list = tokenise_data(data, stop_words, int(config["Model"]["vocab_min_occurrence"]))
 
         word_embedding, vocab_list = embedding_main(vocab_list, config)
 
@@ -85,13 +77,14 @@ def main():
 
         for i in range(ensemble_size):
             # Train selected model (BOW or BiLSTM) if "train" arg specified
-            # sub_idx = np.random.choice(range(len(encode_data)), size=int(len(encode_data) / ensemble_size))
-            # print(len(sub_idx))
-            # X_sub = [encode_data[i] for i in sub_idx]
-            # y_sub = [indexed_label[i] for i in sub_idx]
-
-            X_sub = encode_data
-            y_sub = indexed_label
+            if ensemble_size > 1:
+                sub_idx = np.random.choice(range(len(encode_data)), size=int(len(encode_data) / ensemble_size))
+                print(len(sub_idx))
+                X_sub = [encode_data[i] for i in sub_idx]
+                y_sub = [indexed_label[i] for i in sub_idx]
+            else:
+                X_sub = encode_data
+                y_sub = indexed_label
 
             dataset = QuestionDataset(X_sub, y_sub)
             train_ds, val_ds = random_split(dataset, [len(X_sub) - int(len(X_sub) * 0.1), int(len(X_sub) * 0.1)])
@@ -113,17 +106,17 @@ def main():
             torch.save({
                 "model_state_dict": model.state_dict(),
                 # "optimizer_state_dict": optimiser.state_dict()
-            }, "{0}model.{1}.{2}.pt".format(config["Model"]["path_model"], config["Model"]["model"], i))
+            }, "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
 
         torch.save({
             "word_embedding_state_dict": word_embedding.state_dict(),
             "stop_words": stop_words,
             "vocab_list": vocab_list,
             "classes": classes
-        }, config["Model"]["path_cache"])
+        }, config["Paths"]["path_cache"])
 
     elif args.test:
-        checkpoint = torch.load(config["Model"]["path_cache"])
+        checkpoint = torch.load(config["Paths"]["path_cache"])
 
         stop_words = checkpoint["stop_words"]
         vocab_list = checkpoint["vocab_list"]
@@ -143,7 +136,7 @@ def main():
         indexed_label = torch.LongTensor([classes.index(x) for x in labels])
 
         for i in range(ensemble_size):
-            checkpoint = torch.load("{0}model.{1}.{2}.pt".format(config["Model"]["path_model"], config["Model"]["model"], i))
+            checkpoint = torch.load("{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
             model_fn = model_dict[config["Model"]["model"]]
             model = model_fn(word_embedding, read_config(config["Paths"]["%s_config" % (config["Model"]["model"])]),
                              len(classes))
@@ -215,7 +208,7 @@ def load_data(directory):
 
 
 # Split the data into tokens.
-def tokenise_data(data, stop_words):
+def tokenise_data(data, stop_words, min_occurence):
     vocab_counter = Counter()
     for line in data:
         [_, sentence] = line.split(" ", 1)
@@ -227,7 +220,7 @@ def tokenise_data(data, stop_words):
 
     vocab_list = []
     for word, count in vocab_counter.items():
-        if count > 1:
+        if count >= min_occurence:
             vocab_list.append(word)
 
     vocab_list.append("#unk#")
@@ -304,7 +297,6 @@ def train_model(model, train_dl, val_dl, epochs=10, lr=0.1, opt_fn=torch.optim.S
             total_val_loss += loss.item() * y_batch.shape[0]
             # _, y_pred = torch.max(y_out, 1)
             # print(y_out)
-            y_out = F.softmax(y_out, dim=1)
             y_pred = torch.max(y_out, 1)[1]
             correct += (y_pred == y_batch).sum().item()
             # print("out")
@@ -329,7 +321,6 @@ def test_model(model, x, y, classes):
     x = x.to(device)
     y = y.to(device)
     y_out = model(x)
-    y_out = F.softmax(y_out, dim=1)
     y_pred = torch.max(y_out, 1)[1]
     # correct = (y_pred == y).sum().item()
     # accuracy = correct / y_out.shape[0]
