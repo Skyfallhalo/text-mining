@@ -35,13 +35,8 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from bilstm import main as bilstm_main
 from bow import main as bow_main
 from embedding import main as embedding_main
-# from ffnn_classifier import testModel as ffnn_testModel
-# from ffnn_classifier import trainModel as ffnn_trainModel
-from ffnn_classifier_bkp import testModel as ffnn_testModel
-from ffnn_classifier_bkp import trainModel as ffnn_trainModel
-
-import matplotlib.pyplot
-import matplotlib.ticker
+from ffnn_classifier import testModel as ffnn_testModel
+from ffnn_classifier import trainModel as ffnn_trainModel
 
 #Basic Definitions
 defaultConfig = '../data/config.ini'
@@ -74,8 +69,6 @@ def main():
         # Obtain ensemble's results of interrogating the specified NN.
         results, results_ens = testModel(config, ensembleSize, stopWords)
 
-        displayResults(results, results_ens)
-
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
 def handleArguments():
@@ -104,7 +97,7 @@ def readConfig(configFile):
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
     data = []
-    with open(directory, "r") as f:# get data
+    with open(directory, "r", encoding = 'latin-1') as f:# get data
         for line in f:
             data.append(line.strip())
 
@@ -394,13 +387,6 @@ def aggregateResults(config, results):
     results = torch.stack(results) 
     y_pred, _ = torch.mode(results, 0)
     return y_pred
-
-
-def displayResults(results, results_ens):
-    
-    #Using MatPlotLib
-    fig, ax = matplotlib.pyplot.subplots() # Make a new, large subplot 
-
 
 class LateDataset(Dataset):
     def __init__(self, text, label):
