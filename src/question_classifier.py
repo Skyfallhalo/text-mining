@@ -67,7 +67,9 @@ def main():
     elif args.test:
 
         # Obtain ensemble's results of interrogating the specified NN.
-        results, results_ens = testModel(config, ensembleSize, stopWords)
+        results, results_ens, accuracy = testModel(config, ensembleSize, stopWords)
+        
+        outputResults(config, results_ens, accuracy)
 
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
@@ -331,16 +333,16 @@ def testModel(config, ensembleSize, stopWords):
     #return results, y_pred_ens, 
     
     #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-    plaintext_lab = classifyModelOutput(y_test, y_pred_ens, classes)
+    plaintext_lab, accuracy = classifyModelOutput(y_test, y_pred_ens, classes)
     
-    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
+    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label, Accuracy
     p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
     p_results = [[[val, p_results[i][j], targets[j]] for j, val in enumerate(text)] for i, result in enumerate(results)]
     
     p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
     p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]    
     
-    return p_results, p_results_ens
+    return p_results, p_results_ens, accuracy
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
 def classifyModelOutput(y, y_pred, classes):
@@ -362,7 +364,7 @@ def classifyModelOutput(y, y_pred, classes):
     print("macro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='macro'))
     print("weighted F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='weighted'))
     
-    return target_names
+    return target_names, accuracy_score(y.cpu(), y_pred.cpu())
 
 #Takes the map of tensor results, and uses an ensemble model to generate a single set of classifications.
 def aggregateResults(config, results):
@@ -373,6 +375,25 @@ def aggregateResults(config, results):
     results = torch.stack(results) 
     y_pred, _ = torch.mode(results, 0)
     return y_pred
+
+def outputResults(config, results, accuracy):
+    file = config["Evaluation"]["path_eval_result"]
+    
+    with open(file, 'w') as output:
+    
+        model = config['Model']['model']
+        ensemble = config['Model']['ensemble_size']
+        
+        output.write('Model Results:\n')  
+        output.write('[Model used: {0}] [Model count used (more than one indicates ensemble): {1}]\n'.format(model, ensemble)) 
+        output.write('Reported accuracy: {0}\n\n'.format(accuracy))    
+
+        for entry in results:
+    
+            line = 'Question: {0},   Predicted Label: {1},   Actual Label: {2}\n'.format(entry[0], entry[1], entry[2])
+            output.write(line)    
+        
+        print("Results outputted to file '{0}' successfully.".format(file))
 
 class LateDataset(Dataset):
     def __init__(self, text, label):
