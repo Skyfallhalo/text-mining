@@ -49,12 +49,12 @@ def trainModel(data_train, data_dev, model, numEpochs=10, lr=0.1):
     
     #Main loop
     trainLoss, trainAcc = 0, 0
-    
-    model.train()
      
     for epoch in range(numEpochs):
         epochStart = time.time()
  
+        model.train()
+        
         epochLoss, epochTotal = 0, 0
         
         for text, targets in data_train:

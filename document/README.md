@@ -83,9 +83,6 @@ A directory that holds input and output files to be used by the program.
     data/bilstm_config.ini
     Configuration file for the BiLSTM model, containing parameters to be applied to the nn.Model instance.
     
-    data/bow_config.ini
-    Configuration file for the BOW model, containing parameters to be applied to the nn.Model instance.
-    
     data/classifier_config.ini
     Configuration file for the training and testing methods for the supplied model, such as hyperparameters.
     
@@ -94,6 +91,12 @@ A directory that holds input and output files to be used by the program.
     
     data/stopWords.txt
     A pre-supplied list of "stopwords", which are omitted in the tokenisation process.
+
+    data/train.txt, data/dev.txt and test.txt
+    Train, development and test files used for respective parts in model training and testing.
+
+    Additionally, model outputs will be saved in format model.$model_name$.$number$.pt .
+    
 
 document/
 A directory holding supplementary documentation for the program.
@@ -124,6 +127,91 @@ A directory containing the source code of the program.
     
     src/question_classifier.py
     The main program file. Controls the logic of the classifier; reads arguments, imports the external embedding/model/train/test functions, and defines the data pipeline between them.
+
+    src/formatTxts.py
+    Create train.txt, dev.txt, and test.txt from given files.
     
     
 Configuration Parameter Listing:
+
+    path_train 
+    Path to train.txt file.
+
+    path_dev
+    Path to dev.txt file.
+
+    path_test
+    Path to test.txt file.
+
+    config
+    Path to config.ini file.
+
+    bilstm_config
+    Path to bilstm_config.ini file.
+
+    classifier_config
+    Path to classifier.ini file.
+
+    stop_words
+    Path to stop_words.txt file.
+
+    path_model_prefix
+    Path prefix to directory models are saved to.
+    
+    path_cache 
+    Path to model_cache.pt file.
+
+    path_pre_emb
+    Path to glove.txt file.
+
+    path_eval_result 
+    Path to output.txt file.
+
+    model
+    Desired model for question_classifier to run with. (bow/bilstm)
+
+    ensemble_size : 1
+    Ensemble size of model. This can be 1 if ensemble not desired, or any integer greater than 1 if not.
+
+    ensemble_min_split_size
+    Decides the minimum split size of the data for ensembles. Can be an positive integer.
+
+    pre_emb
+    If true, we use pregenerated embeddings (loaded from glove.txt). Else, we use randomly-generated embeddings.
+
+    emb_freeze
+    Decide whether to make the embedding static, so that it isn't passed to the optimiser. (true/false)
+
+    sentence_max_length
+    Max length of sentence. Can be any positive integer.
+
+    vocab_min_occurrence
+    Can be any positive integer.
+
+    word_embedding_dim : 200
+    Dimension of word embeddings. Can be any positive integer.
+
+    batch_size : 10
+    Neural Network batch size. Can be any positive integer.
+
+    epoch
+    Number of cycles through the full training and developmental sets. Can be any positive number greater or equal to 1.
+
+    lowercase
+    Whether to make datasets lowercase. (true/false)
+
+    lr_param
+    Learning rate of the NN. (0-1)
+
+    hidden_dim
+    Dimension of hidden layer. Can be any positive integer greater or equal to 1.
+
+    num_layers
+    Number of layers in NN. Can be any positive integer greater or equal to 1.
+
+    dropout
+    Not used.
+
+
+    
+
