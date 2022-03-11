@@ -26,7 +26,6 @@ import configparser
 import random
 import re
 
-import numpy
 import numpy as np
 
 import torch
@@ -54,6 +53,7 @@ model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 #Set random seeds
 torch.manual_seed(1)
 random.seed(1)
+np.random.seed(1)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
