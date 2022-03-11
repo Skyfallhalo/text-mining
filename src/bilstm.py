@@ -10,6 +10,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BiLSTM(nn.Module):
@@ -65,7 +66,7 @@ class BiLSTM(nn.Module):
         # And output tensor is of shape (batch_size, class_num)
         out = self.fc(ht[0, :, :] + ht[1, :, :])
 
-        return out
+        return F.log_softmax(out, dim=1)
 
 
 def main(embedding, config, class_num):
