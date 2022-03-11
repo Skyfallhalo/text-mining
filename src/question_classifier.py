@@ -204,6 +204,21 @@ def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size
         X_dev = X[train_size:]
         y_train = y[:train_size]
         y_dev = y[train_size:]
+
+        ##############################################################################
+        percentage = 0.2
+
+        sub_size = int(len(X_train) * percentage)
+        sub_idx = np.random.choice(range(len(X_train)), size=sub_size)
+        X_train = [X_train[i] for i in sub_idx]
+        y_train = [y_train[i] for i in sub_idx]
+
+        sub_size = int(len(X_dev) * percentage)
+        sub_idx = np.random.choice(range(len(X_dev)), size=sub_size)
+        X_dev = [X_dev[i] for i in sub_idx]
+        y_dev = [y_dev[i] for i in sub_idx]
+        #############################################################################
+
         train_ds = LateDataset(X_train, y_train)
         dev_ds = LateDataset(X_dev, y_dev)
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
@@ -328,7 +343,8 @@ def testModel(config, ensembleSize, stopWords):
         model.to(device)
 
         #Test selected model (BOW or BiLSTM) if "test" arg specified
-        results.append(ffnn_testModel(X_test, y_test, model))   
+        y_pred = ffnn_testModel(X_test, y_test, model)
+        results.append(y_pred)
         
     #Aggregate results of ensemble
     y_pred_ens = aggregateResults(config, results)

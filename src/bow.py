@@ -30,7 +30,7 @@ class BOWClassifier(nn.Module):
         for i in x: # find vec_bow(x)
 
             i = i[torch.nonzero(i).squeeze()] # remove padding words
-            lookup_tensor = Variable(torch.LongTensor(i))
+            lookup_tensor = Variable(i)
             vec = self.embedding(lookup_tensor)
 
             if vec.dim() == 1: # add padding vectors back
