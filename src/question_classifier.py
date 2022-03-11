@@ -337,7 +337,7 @@ def testModel(config, ensembleSize):
     
     #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
     p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
-    p_results = [[[val, p_results[i][j], targets[i]] for j, val in enumerate(text)] for i, result in enumerate(results)]
+    p_results = [[[val, p_results[i][j], targets[j]] for j, val in enumerate(text)] for i, result in enumerate(results)]
     
     p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
     p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]    
