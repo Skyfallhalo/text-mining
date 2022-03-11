@@ -100,7 +100,7 @@ def trainModel(data_train, data_dev, model, numEpochs=10, lr=0.1):
             vTotal += targets.shape[0]
             
             goldLabels = torch.max(tag_scores, 1)[1]
-            tag_scores += (goldLabels == targets).sum().item()
+            correctClassifications += (goldLabels == targets).sum().item()
             
         vLoss = valueLoss / vTotal
         vAccuracy = correctClassifications / vTotal
@@ -128,7 +128,7 @@ def testModel(text, targets, model):
 
     text = text.to(device)
     targets = targets.to(device)
-    tag_scores = model(X)
+    tag_scores = model(text)
     predictions = torch.max(tag_scores, 1)[1]
     
     return predictions

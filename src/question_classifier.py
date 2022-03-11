@@ -69,8 +69,6 @@ def main():
         # Obtain ensemble's results of interrogating the specified NN.
         results, results_ens = testModel(config, ensembleSize, stopWords)
 
-        displayResults(results, results_ens)
-
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
 def handleArguments():
@@ -389,13 +387,6 @@ def aggregateResults(config, results):
     results = torch.stack(results) 
     y_pred, _ = torch.mode(results, 0)
     return y_pred
-
-
-def displayResults(results, results_ens):
-    
-    #Using MatPlotLib
-    fig, ax = matplotlib.pyplot.subplots() # Make a new, large subplot 
-
 
 class LateDataset(Dataset):
     def __init__(self, text, label):
