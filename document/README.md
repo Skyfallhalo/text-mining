@@ -194,9 +194,6 @@ Configuration Parameter Listing:
     batch_size : 10
     Neural Network batch size. Can be any positive integer.
 
-    early_stopping
-    Early stopping incase NN isn't improving. Can be any positive integer.
-
     epoch
     Number of cycles through the full training and developmental sets. Can be any positive number greater or equal to 1.
 
