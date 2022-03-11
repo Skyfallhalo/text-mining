@@ -44,7 +44,11 @@ from embedding import main as embedding_main
 from ffnn_classifier_bkp import testModel as ffnn_testModel
 from ffnn_classifier_bkp import trainModel as ffnn_trainModel
 
-#Basic Structual Definitions
+import matplotlib.pyplot
+import matplotlib.ticker
+
+#Basic Definitions
+defaultConfig = '../data/config.ini'
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 
 #Set random seeds
@@ -70,11 +74,9 @@ def main():
     elif args.test:
         
         #Obtain ensemble's results of interrogating the specified NN.
-        results = testModel(config, ensembleSize)
-        
-        #aggregateResults(results)
+        results, results_ens = testModel(config, ensembleSize)
     
-        #displayResults(results)
+        displayResults(results, results_ens)
 
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
@@ -82,7 +84,7 @@ def handleArguments():
 
      # check parsed arguements (as found in coursework pdf)
         parser = argparse.ArgumentParser()
-        parser.add_argument('--config', type=str, required=True, help='Configuration file')
+        parser.add_argument('--config', default=defaultConfig, type=str, help='Configuration file')
         parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
         parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
 
@@ -253,6 +255,7 @@ def trainModel(config, ensembleSize):
         dev_dl = DataLoader(dev_ds, batch_size=batch_size)
 
         #Train selected model (BOW or BiLSTM) if "train" arg specified
+        print("Training for Model {0} of {1}".format(i, ensembleSize))
         model = ffnn_trainModel(train_dl, dev_dl, model,
                                 numEpochs=int(classifierconfig["Model Settings"]["epoch"]),
                                 lr=float(classifierconfig["Hyperparameters"]["lr_param"]))
@@ -308,9 +311,12 @@ def testModel(config, ensembleSize):
     for i in range(ensembleSize):
 
         # Load model's training data
-        checkpoint = torch.load(
-            "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
-
+        try:
+            filename = "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i)
+            checkpoint = torch.load(filename)
+        except FileNotFoundError:  
+            raise Exception("Error: no model found '" + filename + "'. Was the model trained with a different ensemble count?")
+        
         # Construct model instance (new for ensemble iteration)
         modelstring = config["Model"]["model"]
         modelconfig = readConfig(config["Paths"][modelstring + "_config"])
@@ -321,18 +327,27 @@ def testModel(config, ensembleSize):
         #Test selected model (BOW or BiLSTM) if "test" arg specified
         results.append(ffnn_testModel(X_test, y_test, model))   
         
+    #Aggregate results of ensemble
+    y_pred_ens = aggregateResults(config, results)
+    
+    #return results, y_pred_ens, 
+    
     #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-    return classifyModelOutput(results, y_test, classes)
-
+    plaintext_lab = classifyModelOutput(y_test, y_pred_ens, classes)
+    
+    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
+    p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
+    p_results = [[[val, p_results[i][j], targets[i]] for j, val in enumerate(text)] for i, result in enumerate(results)]
+    
+    p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
+    p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]    
+    
+    return p_results, p_results_ens
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
-def classifyModelOutput(results, y, classes):
-    results = torch.stack(results)
-    #Get the maximum occurrence of label in the outcome of each test sentence
-    y_pred, _ = torch.mode(results, 0)
-
-    # y = y.cpu()
-    # y_pred = y_pred.cpu()
+def classifyModelOutput(y, y_pred, classes):
+    
+    #Create class list of only classes that are relevant.
     idx_list = torch.ones(len(classes))
     for n in y.unique():
         idx_list[n.item()] = 0
@@ -341,19 +356,31 @@ def classifyModelOutput(results, y, classes):
     target_names = classes.copy()
     for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
         del target_names[i]
+    
+    #Print basic classification report statistics
     print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
     print("accuracy:", accuracy_score(y.cpu(), y_pred.cpu()))
     print("micro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='micro'))
     print("macro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='macro'))
     print("weighted F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='weighted'))
+    
+    return target_names
+
+#Takes the map of tensor results, and uses an ensemble model to generate a single set of classifications.
+def aggregateResults(config, results):
+    
+    #Results: array of ensemble predictions
+    #y_test: Gold standard labels
+    
+    results = torch.stack(results) 
+    y_pred, _ = torch.mode(results, 0)
+    return y_pred
 
 
-def aggregateResults():
-    print("Debug!")
-
-
-def displayResults():
-    print("Debug!")
+def displayResults(results, results_ens):
+    
+    #Using MatPlotLib
+    fig, ax = matplotlib.pyplot.subplots() # Make a new, large subplot 
 
 
 class LateDataset(Dataset):
