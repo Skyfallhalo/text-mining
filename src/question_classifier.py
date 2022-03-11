@@ -47,7 +47,8 @@ from ffnn_classifier_bkp import trainModel as ffnn_trainModel
 import matplotlib.pyplot
 import matplotlib.ticker
 
-#Basic Structual Definitions
+#Basic Definitions
+defaultConfig = '../data/config.ini'
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 
 #Set random seeds
@@ -84,7 +85,7 @@ def handleArguments():
 
      # check parsed arguements (as found in coursework pdf)
         parser = argparse.ArgumentParser()
-        parser.add_argument('--config', type=str, required=True, help='Configuration file')
+        parser.add_argument('--config', default=defaultConfig, type=str, help='Configuration file')
         parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
         parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
 
@@ -199,138 +200,6 @@ def encodeData(lemmadata, vocabulary, padlength):
     return encoded
 
 
-#Contains the prepatory code for training
-def trainModel(config, ensembleSize, stopwords):
-
-    #Load misc. config
-    classifierconfig = readConfig(config["Paths"]["classifier_config"])
-
-    #Load data from file
-    trainData = loadData(config["Paths"]["path_train"])
-    devData = loadData(config["Paths"]["path_dev"])
-
-    data = trainData + devData
-
-    #Preprocess data: splits strings into lists of their labels and text.
-    text, targets = preprocessData(data)
-
-    #Tokenise: Takes raw texts, returns their lemma form and a unique token list
-    lemmadata, tokens = tokeniseData(text, stopwords, int(config["Model"]["vocab_min_occurrence"]))
-
-    #Embed: Convert unique token list into word embeddings.
-    embeddings, vocabulary = generateWordEmbeddings(tokens, config)
-
-    #Encode: Convert data into numerical equivalents
-    encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
-
-    #Get the list of unique classes of questions, the length of classes is supposed to be 50
-    classes = list(set(targets))
-    classes.sort()
-    indexedtargets = [classes.index(x) for x in targets]
-
-    #Construct model
-    modelstring = config["Model"]["model"]
-    modelconfig = readConfig(config["Paths"][modelstring + "_config"])
-
-    #Ensemble results loop
-    for i in range(ensembleSize):
-
-        if modelstring == "bilstm" or modelstring == "bow":
-            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
-            model.to(device)
-
-        else:
-            raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
-
-        # Split training and development data and generate data loaders
-        train_dl, dev_dl = generateDatasets(encodeddata, indexedtargets, ensembleSize,
-                                            int(config["Network Structure"]["batch_size"]),
-                                            len(trainData),
-                                            int(config["Model"]["ensemble_min_split_size"]))
-
-        # Train selected model (BOW or BiLSTM) if "train" arg specified
-        model = ffnn_trainModel(train_dl, dev_dl, model,
-                                numEpochs=int(classifierconfig["Model Settings"]["epoch"]),
-                                lr=float(classifierconfig["Hyperparameters"]["lr_param"]))
-
-        torch.save({
-            "model_state_dict": model.state_dict()
-        }, "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
-
-    torch.save({
-        "word_embedding_state_dict": embeddings.state_dict(),
-        "vocab_list": vocabulary,
-        "classes": classes
-    }, config["Paths"]["path_cache"])
-
-def testModel(config, ensembleSize, stopWords):
-    # Load data from checkpoint
-    checkpoint = torch.load(config["Paths"]["path_cache"])
-
-    vocabulary = checkpoint["vocab_list"]
-    classes = checkpoint["classes"]
-
-    embeddings = nn.Embedding(checkpoint["word_embedding_state_dict"]["weight"].size(dim=0),
-                              checkpoint["word_embedding_state_dict"]["weight"].size(dim=1))
-    embeddings.load_state_dict(checkpoint["word_embedding_state_dict"])
-
-    testData = loadData(config["Paths"]["path_test"])
-
-    # Preprocess data: splits strings into lists of their labels and text.
-    text, targets = preprocessData(testData)
-
-    # Tokenise: Takes raw texts, returns their lemma form and a unique token list
-    lemmadata, _ = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
-
-    # Encode: Convert data into numerical equivalents
-    encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
-
-    indexedtargets = [classes.index(x) for x in targets]
-
-    X_test = torch.LongTensor(encodeddata[:len(testData)])
-    y_test = torch.LongTensor(indexedtargets[:len(testData)])
-
-    results = []
-
-    for i in range(ensembleSize):
-
-        # Load model's training data
-        try:
-            filename = "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i)
-            checkpoint = torch.load(filename)
-        except FileNotFoundError:
-            raise Exception(
-                "Error: no model found '" + filename + "'. Was the model trained with a different ensemble count?")
-
-        # Construct model instance (new for ensemble iteration)
-        modelstring = config["Model"]["model"]
-        modelconfig = readConfig(config["Paths"][modelstring + "_config"])
-        model = model_sources[modelstring](embeddings, modelconfig, len(classes))
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.to(device)
-
-        # Test selected model (BOW or BiLSTM) if "test" arg specified
-        results.append(ffnn_testModel(X_test, y_test, model))
-
-    # Aggregate results of ensemble
-    y_pred_ens = aggregateResults(config, results)
-
-    # return results, y_pred_ens,
-
-    # Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-    plaintext_lab = classifyModelOutput(y_test, y_pred_ens, classes)
-
-    # Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
-    p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
-    p_results = [[[val, p_results[i][j], targets[j]] for j, val in enumerate(text)] for i, result in
-                 enumerate(results)]
-
-    p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
-    p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]
-
-    return p_results, p_results_ens
-
-
 def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size):
 
     if ensemble_size > 1:
@@ -354,15 +223,146 @@ def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size
 
     return train_dl, dev_dl
 
+#Contains the prepatory code for training
+def trainModel(config, ensembleSize, stopWords):
+
+    #Load misc. config
+    classifierconfig = readConfig(config["Paths"]["classifier_config"])
+
+    #Load data from file
+    trainData = loadData(config["Paths"]["path_train"])
+    devData = loadData(config["Paths"]["path_dev"])
+
+    data = trainData + devData
+
+    #Preprocess data: splits strings into lists of their labels and text.
+    text, targets = preprocessData(data)
+
+    #Tokenise: Takes raw texts, returns their lemma form and a unique token list
+    lemmadata, tokens = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
+
+    #Embed: Convert unique token list into word embeddings.
+    embeddings, vocabulary = generateWordEmbeddings(tokens, config)
+
+    #Encode: Convert data into numerical equivalents
+    encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
+
+    #Get the list of unique classes of questions, the length of classes is supposed to be 50
+    classes = list(set(targets))
+    classes.sort()
+    indexed_targets = [classes.index(x) for x in targets]
+
+    #Construct model
+    modelstring = config["Model"]["model"]
+    modelconfig = readConfig(config["Paths"][modelstring+"_config"])
+
+    #Ensemble results loop
+    for i in range(ensembleSize):
+
+        if modelstring == "bilstm" or modelstring == "bow":
+            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+            model.to(device)
+
+        else:
+            raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
+
+        # Split training and development data and generate data loaders
+        train_dl, dev_dl = generateDatasets(encodeddata, indexed_targets, ensembleSize,
+                                            int(config["Network Structure"]["batch_size"]),
+                                            len(trainData),
+                                            int(config["Model"]["ensemble_min_split_size"]))
+
+        #Train selected model (BOW or BiLSTM) if "train" arg specified
+        print("Training for Model {0} of {1}".format(i, ensembleSize))
+        model = ffnn_trainModel(train_dl, dev_dl, model,
+                                numEpochs=int(classifierconfig["Model Settings"]["epoch"]),
+                                lr=float(classifierconfig["Hyperparameters"]["lr_param"]))
+
+        #Save the results of model's training to file.
+        torch.save({
+            "model_state_dict": model.state_dict()
+        }, "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
+
+    #Save word embeddings, vocab list, and class/label reference to file. 
+    torch.save({
+        "word_embedding_state_dict": embeddings.state_dict(),
+        "vocab_list": vocabulary,
+        "classes": classes
+    }, config["Paths"]["path_cache"])    
+    
+def testModel(config, ensembleSize, stopWords):
+    
+    #Load data from checkpoint
+    checkpoint = torch.load(config["Paths"]["path_cache"])
+
+    vocabulary = checkpoint["vocab_list"]
+    classes = checkpoint["classes"]
+
+    #Embed: Load previously generated word embedding map.
+    embeddings = nn.Embedding(checkpoint["word_embedding_state_dict"]["weight"].size(dim=0),
+                              checkpoint["word_embedding_state_dict"]["weight"].size(dim=1))
+    embeddings.load_state_dict(checkpoint["word_embedding_state_dict"])
+
+    
+    # Load data.
+    testData = loadData(config["Paths"]["path_test"])
+
+    # Preprocess data: splits strings into lists of their labels and text.
+    text, targets = preprocessData(testData)
+
+    # Tokenise: Takes raw texts, returns their lemma form and a unique token list
+    lemmadata, _ = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
+
+    # Encode: Convert data/classes into numerical equivalents
+    encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
+    indexed_targets = [classes.index(x) for x in targets]
+
+    # Convert data/labels to tensor format
+    X_test = torch.LongTensor(encodeddata[:len(testData)])
+    y_test = torch.LongTensor(indexed_targets[:len(testData)])
+
+    results = []
+
+    for i in range(ensembleSize):
+
+        # Load model's training data
+        try:
+            filename = "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i)
+            checkpoint = torch.load(filename)
+        except FileNotFoundError:  
+            raise Exception("Error: no model found '" + filename + "'. Was the model trained with a different ensemble count?")
+        
+        # Construct model instance (new for ensemble iteration)
+        modelstring = config["Model"]["model"]
+        modelconfig = readConfig(config["Paths"][modelstring + "_config"])
+        model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.to(device)
+
+        #Test selected model (BOW or BiLSTM) if "test" arg specified
+        results.append(ffnn_testModel(X_test, y_test, model))   
+        
+    #Aggregate results of ensemble
+    y_pred_ens = aggregateResults(config, results)
+    
+    #return results, y_pred_ens, 
+    
+    #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
+    plaintext_lab = classifyModelOutput(y_test, y_pred_ens, classes)
+    
+    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
+    p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
+    p_results = [[[val, p_results[i][j], targets[j]] for j, val in enumerate(text)] for i, result in enumerate(results)]
+    
+    p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
+    p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]    
+    
+    return p_results, p_results_ens
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
-def classifyModelOutput(results, y, classes):
-    results = torch.stack(results)
-    #Get the maximum occurrence of label in the outcome of each test sentence
-    y_pred, _ = torch.mode(results, 0)
-
-    # y = y.cpu()
-    # y_pred = y_pred.cpu()
+def classifyModelOutput(y, y_pred, classes):
+    
+    #Create class list of only classes that are relevant.
     idx_list = torch.ones(len(classes))
     for n in y.unique():
         idx_list[n.item()] = 0
@@ -371,26 +371,31 @@ def classifyModelOutput(results, y, classes):
     target_names = classes.copy()
     for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
         del target_names[i]
+    
+    #Print basic classification report statistics
     print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
     print("accuracy:", accuracy_score(y.cpu(), y_pred.cpu()))
     print("micro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='micro'))
     print("macro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='macro'))
     print("weighted F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='weighted'))
+    
+    return target_names
 
-
-# Takes the map of tensor results, and uses an ensemble model to generate a single set of classifications.
+#Takes the map of tensor results, and uses an ensemble model to generate a single set of classifications.
 def aggregateResults(config, results):
-    # Results: array of ensemble predictions
-    # y_test: Gold standard labels
-
-    results = torch.stack(results)
+    
+    #Results: array of ensemble predictions
+    #y_test: Gold standard labels
+    
+    results = torch.stack(results) 
     y_pred, _ = torch.mode(results, 0)
     return y_pred
 
 
 def displayResults(results, results_ens):
-    # Using MatPlotLib
-    fig, ax = matplotlib.pyplot.subplots()  # Make a new, large subplot
+    
+    #Using MatPlotLib
+    fig, ax = matplotlib.pyplot.subplots() # Make a new, large subplot 
 
 
 class LateDataset(Dataset):
