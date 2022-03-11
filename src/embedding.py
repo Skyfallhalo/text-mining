@@ -12,7 +12,7 @@
 import torch
 import torch.nn as nn
 
-def main(vocab_list,config):
+def main(vocab_list, config):
     """
     return embedding result and vocabulary.
     
@@ -35,10 +35,14 @@ def main(vocab_list,config):
       embedding: a nn.embedding variable
       trimmed_vocab_list: a trimmed final vocab list
     """
+
+    if config["Model"].getboolean("emb_freeze") and not config["Model"].getboolean("pre_emb"):
+        raise Exception("The freezing randomly initialised vectors are not supported.")
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     trimmed_vocab_list = []
     # Case when pretrained vectors are used
-    if config["Using pre-trained Embeddings"].getboolean("pre_emb"):
+    if config["Model"].getboolean("pre_emb"):
         vec_list = []
         vec_size = 0
         with open(config["Using pre-trained Embeddings"]["path_pre_emb"]) as f:
@@ -81,7 +85,7 @@ def main(vocab_list,config):
 
     embedding.to(device)
     # Set whether the embeddings should be fine-tuned during data training
-    embedding.weight.requires_grad = not config["Using pre-trained Embeddings"].getboolean("emb_freeze")
+    embedding.weight.requires_grad = not config["Model"].getboolean("emb_freeze")
 
     return embedding, trimmed_vocab_list
 

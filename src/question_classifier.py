@@ -34,7 +34,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import classification_report, accuracy_score, f1_score
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 
 from bilstm import main as bilstm_main
 from bow import main as bow_main
@@ -63,19 +63,20 @@ def main():
     #Read Arguments, Config Files
     args = handleArguments()
     config = readConfig(args.config)
-    
+
+    stopWords = loadData(config["Paths"]["stop_words"])
     ensembleSize = int(config["Model"]["ensemble_size"])
 
     #Retrieve
     if args.train:
 
-        trainModel(config, ensembleSize)
-        
+        trainModel(config, ensembleSize, stopWords)
+
     elif args.test:
-        
-        #Obtain ensemble's results of interrogating the specified NN.
-        results, results_ens = testModel(config, ensembleSize)
-    
+
+        # Obtain ensemble's results of interrogating the specified NN.
+        results, results_ens = testModel(config, ensembleSize, stopWords)
+
         displayResults(results, results_ens)
 
 
@@ -115,7 +116,7 @@ def writeConfig(configFile, data):
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
     data = []
-    with open(directory, "r", encoding='latin-1') as f:# get data
+    with open(directory, "r") as f:# get data
         for line in f:
             data.append(line.strip())
 
@@ -128,7 +129,6 @@ def tokeniseData(data, stopwords, min_occurence):
     stopWords = stopwords
     #text = text.split("\n")
     #stopWords = stopWords.split("\n")
-
 
     documents = []
     for sen in text:
@@ -199,13 +199,36 @@ def encodeData(lemmadata, vocabulary, padlength):
 
     return encoded
 
-# Contains the prepatory code for training 
-def trainModel(config, ensembleSize):
-    
+
+def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size):
+
+    if ensemble_size > 1:
+        # Randomly split subsets
+        split_size = min_split_size if int(len(X) / ensemble_size) < min_split_size else int(
+            len(X) / ensemble_size)
+        sub_idx = np.random.choice(range(len(X)), size=split_size)
+        X_sub = [X[i] for i in sub_idx]
+        y_sub = [y[i] for i in sub_idx]
+        dataset = LateDataset(X_sub, y_sub)
+        train_ds, dev_ds = random_split(dataset, [len(X_sub) - int(len(X_sub) * 0.1), int(len(X_sub) * 0.1)])
+    else:
+        X_train = X[:train_size]
+        X_dev = X[train_size:]
+        y_train = y[:train_size]
+        y_dev = y[train_size:]
+        train_ds = LateDataset(X_train, y_train)
+        dev_ds = LateDataset(X_dev, y_dev)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+
+    return train_dl, dev_dl
+
+#Contains the prepatory code for training
+def trainModel(config, ensembleSize, stopWords):
+
     #Load misc. config
-    stopWords = loadData(config["Paths"]["stop_words"])
-    classifierconfig = readConfig(config["Paths"]["classifier_config"])   
-    
+    classifierconfig = readConfig(config["Paths"]["classifier_config"])
+
     #Load data from file
     trainData = loadData(config["Paths"]["path_train"])
     devData = loadData(config["Paths"]["path_dev"])
@@ -244,15 +267,10 @@ def trainModel(config, ensembleSize):
             raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
 
         # Split training and development data and generate data loaders
-        X_train = encodeddata[:len(trainData)]
-        X_dev = encodeddata[len(trainData):]
-        y_train = indexed_targets[:len(trainData)]
-        y_dev = indexed_targets[len(trainData):]
-        train_ds = LateDataset(X_train, y_train)
-        dev_ds = LateDataset(X_dev, y_dev)
-        batch_size = int(config["Network Structure"]["batch_size"])
-        train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-        dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+        train_dl, dev_dl = generateDatasets(encodeddata, indexed_targets, ensembleSize,
+                                            int(config["Network Structure"]["batch_size"]),
+                                            len(trainData),
+                                            int(config["Model"]["ensemble_min_split_size"]))
 
         #Train selected model (BOW or BiLSTM) if "train" arg specified
         print("Training for Model {0} of {1}".format(i, ensembleSize))
@@ -272,10 +290,7 @@ def trainModel(config, ensembleSize):
         "classes": classes
     }, config["Paths"]["path_cache"])    
     
-def testModel(config, ensembleSize):
-    
-    #Load misc. config
-    stopWords = loadData(config["Paths"]["stop_words"])    
+def testModel(config, ensembleSize, stopWords):
     
     #Load data from checkpoint
     checkpoint = torch.load(config["Paths"]["path_cache"])
