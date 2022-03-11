@@ -29,7 +29,7 @@ class BOWClassifier(nn.Module):
 
         for i in x: # find vec_bow(x)
 
-            lookup_tensor = Variable(torch.LongTensor(i)).cuda()
+            lookup_tensor = torch.LongTensor(i)
             vec = self.embedding(lookup_tensor)
             vec = vec.mean(dim=0)
             bow_vector.append(vec)
