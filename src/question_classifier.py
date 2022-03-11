@@ -80,15 +80,15 @@ def main():
 #Checks for the three required arguments - train or test, manually specify config, and config path.
 def handleArguments():
 
-     # check parsed arguements (as found in coursework pdf)
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--config', default=defaultConfig, type=str, help='Configuration file')
-        parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
-        parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
+    # check parsed arguements (as found in coursework pdf)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', default=defaultConfig, type=str, help='Configuration file')
+    parser.add_argument('--train', action='store_true', help='Training mode - model is saved')
+    parser.add_argument('--test', action='store_true', help='Testing mode - needs a model to load')
 
-        # file arguements
-        args = parser.parse_args()
-        return args
+    # file arguements
+    args = parser.parse_args()
+    return args
 
 
 #Attempts to parse provided file as config.
@@ -195,6 +195,7 @@ def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size
         split_size = min_split_size if int(len(X) / ensemble_size) < min_split_size else int(
             len(X) / ensemble_size)
         sub_idx = np.random.choice(range(len(X)), size=split_size)
+        # print(sub_idx)
         X_sub = [X[i] for i in sub_idx]
         y_sub = [y[i] for i in sub_idx]
         dataset = LateDataset(X_sub, y_sub)
@@ -276,7 +277,7 @@ def trainModel(config, ensembleSize, stopWords):
                                             int(config["Model"]["ensemble_min_split_size"]))
 
         #Train selected model (BOW or BiLSTM) if "train" arg specified
-        print("Training for Model {0} of {1}".format(i, ensembleSize))
+        print("Training for Model {0} of {1}".format(i + 1, ensembleSize))
         model = ffnn_trainModel(train_dl, dev_dl, model,
                                 numEpochs=int(classifierconfig["Model Settings"]["epoch"]),
                                 lr=float(classifierconfig["Hyperparameters"]["lr_param"]))
@@ -343,9 +344,8 @@ def testModel(config, ensembleSize, stopWords):
         model.to(device)
 
         #Test selected model (BOW or BiLSTM) if "test" arg specified
-        y_pred = ffnn_testModel(X_test, y_test, model)
-        results.append(y_pred)
-        
+        results.append(ffnn_testModel(X_test, y_test, model))
+
     #Aggregate results of ensemble
     y_pred_ens = aggregateResults(config, results)
     
@@ -375,7 +375,7 @@ def classifyModelOutput(y, y_pred, classes):
     target_names = classes.copy()
     for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
         del target_names[i]
-    
+
     #Print basic classification report statistics
     print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
     print("accuracy:", accuracy_score(y.cpu(), y_pred.cpu()))
