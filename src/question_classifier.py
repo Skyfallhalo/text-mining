@@ -21,18 +21,14 @@
 
 #Library Imports
 import argparse
-import codecs
 import configparser
 import random
 import re
 
-import numpy
 import numpy as np
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 from sklearn.metrics import classification_report, accuracy_score, f1_score
 from torch.utils.data import DataLoader, Dataset, random_split
 
@@ -103,15 +99,6 @@ def readConfig(configFile):
     config.read(configFile)
 
     return config
-
-#Write back to a config file with data.
-def writeConfig(configFile, data):
-
-    config = configparser.ConfigParser()
-
-    with open(configFile, 'w') as file:
-        config.write(file)
-
 
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
