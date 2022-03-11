@@ -22,6 +22,7 @@ def trainModel(train_dl, val_dl, model, numEpochs=10, lr=0.1):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     optimiser = torch.optim.SGD(filter(lambda e: e.requires_grad, model.parameters()), lr=lr)
+    #Softmax ignored
     loss_fn = F.cross_entropy
     for epoch in range(numEpochs):
         start_time = time.time()
@@ -30,11 +31,11 @@ def trainModel(train_dl, val_dl, model, numEpochs=10, lr=0.1):
         model.train()
         train_total = 0
         total_train_loss = 0.0
-        for x_batch, y_batch in train_dl:
+        for X_batch, y_batch in train_dl:
             # Forward pass and get prediction
-            x_batch = x_batch.type(torch.LongTensor).to(device)
+            X_batch = X_batch.type(torch.LongTensor).to(device)
             y_batch = y_batch.to(device)
-            y_out = model(x_batch)
+            y_out = model(X_batch)
 
             # Compute the loss, gradients, and update parameters
             optimiser.zero_grad()
@@ -52,10 +53,10 @@ def trainModel(train_dl, val_dl, model, numEpochs=10, lr=0.1):
         correct = 0
         val_total = 0
         total_val_loss = 0.0
-        for x_batch, y_batch in val_dl:
-            x_batch = x_batch.type(torch.LongTensor).to(device)
+        for X_batch, y_batch in val_dl:
+            X_batch = X_batch.type(torch.LongTensor).to(device)
             y_batch = y_batch.to(device)
-            y_out = model(x_batch)
+            y_out = model(X_batch)
             loss = loss_fn(y_out, y_batch)
             val_total += y_batch.shape[0]
             total_val_loss += loss.item() * y_batch.shape[0]
@@ -72,12 +73,12 @@ def trainModel(train_dl, val_dl, model, numEpochs=10, lr=0.1):
     return model
 
 # Attempts to run BOW or BiLSTM with data, receives returned data, and saves results.
-def testModel(x, y, model):
+def testModel(X, y, model):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    x = x.to(device)
+    X = X.to(device)
     y = y.to(device)
-    y_out = model(x)
+    y_out = model(X)
     y_pred = torch.max(y_out, 1)[1]
 
     return y_pred

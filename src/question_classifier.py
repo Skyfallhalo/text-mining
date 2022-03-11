@@ -34,7 +34,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.metrics import classification_report, accuracy_score, f1_score
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 
 from bilstm import main as bilstm_main
 from bow import main as bow_main
@@ -64,6 +64,10 @@ def main():
     stopWords = loadData(config["Paths"]["stop_words"])
     ensemble_size = int(config["Model"]["ensemble_size"])
 
+    #Construct model
+    modelstring = config["Model"]["model"]
+    modelconfig = readConfig(config["Paths"][modelstring + "_config"])
+
     #Retrieve
     if args.train:
 
@@ -88,11 +92,7 @@ def main():
         #Get the list of unique classes of questions, the length of classes is supposed to be 50
         classes = list(set(targets))
         classes.sort()
-        indexed_targets = [classes.index(x) for x in targets]
-
-        #Construct model
-        modelstring = config["Model"]["model"]
-        modelconfig = readConfig(config["Paths"][modelstring+"_config"])
+        indexedtargets = [classes.index(x) for x in targets]
 
         #Ensemble results loop
         for i in range(ensemble_size):
@@ -104,16 +104,11 @@ def main():
             else:
                 raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
 
-            # Split training and development data and generate data loaders
-            X_train = encodeddata[:len(trainData)]
-            X_dev = encodeddata[len(trainData):]
-            y_train = indexed_targets[:len(trainData)]
-            y_dev = indexed_targets[len(trainData):]
-            train_ds = LateDataset(X_train, y_train)
-            dev_ds = LateDataset(X_dev, y_dev)
-            batch_size = int(config["Network Structure"]["batch_size"])
-            train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-            dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+            #Split training and development data and generate data loaders
+            train_dl, dev_dl = generateDatasets(encodeddata, indexedtargets, ensemble_size,
+                                                int(config["Network Structure"]["batch_size"]),
+                                                len(trainData),
+                                                int(config["Model"]["ensemble_min_split_size"]))
 
             #Train selected model (BOW or BiLSTM) if "train" arg specified
             model = ffnn_trainModel(train_dl, dev_dl, model,
@@ -143,19 +138,19 @@ def main():
 
         testData = loadData(config["Paths"]["path_test"])
 
-        # Preprocess data: splits strings into lists of their labels and text.
+        #Preprocess data: splits strings into lists of their labels and text.
         text, targets = preprocessData(testData)
 
-        # Tokenise: Takes raw texts, returns their lemma form and a unique token list
+        #Tokenise: Takes raw texts, returns their lemma form and a unique token list
         lemmadata, _ = tokeniseData(text, stopWords, int(config["Model"]["vocab_min_occurrence"]))
 
-        # Encode: Convert data into numerical equivalents
+        #Encode: Convert data into numerical equivalents
         encodeddata = encodeData(lemmadata, vocabulary, int(config["Model"]["sentence_max_length"]))
 
-        indexed_targets = [classes.index(x) for x in targets]
+        indexedtargets = [classes.index(x) for x in targets]
 
         X_test = torch.LongTensor(encodeddata[:len(testData)])
-        y_test = torch.LongTensor(indexed_targets[:len(testData)])
+        y_test = torch.LongTensor(indexedtargets[:len(testData)])
 
         results = []
 
@@ -164,19 +159,21 @@ def main():
             checkpoint = torch.load(
                 "{0}model.{1}.{2}.pt".format(config["Paths"]["path_model_prefix"], config["Model"]["model"], i))
 
-            # Construct model
-            modelstring = config["Model"]["model"]
-            modelconfig = readConfig(config["Paths"][modelstring + "_config"])
+            if modelstring == "bilstm" or modelstring == "bow":
+                model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+                model.load_state_dict(checkpoint['model_state_dict'])
+                model.to(device)
 
-            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
-            model.load_state_dict(checkpoint['model_state_dict'])
-            model.to(device)
+            else:
+                raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
 
             #Test selected model (BOW or BiLSTM) if "test" arg specified
-            results.append(ffnn_testModel(X_test, y_test, model))
+            y_pred = ffnn_testModel(X_test, y_test, model)
+            print("accuracy:", accuracy_score(y_test.cpu(), y_pred.cpu()))
+            results.append(y_pred)
 
-            #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-            classifyModelOutput(results, y_test, classes)
+        #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
+        classifyModelOutput(results, y_test, classes)
 
         aggregateResults()
 
@@ -302,6 +299,31 @@ def encodeData(lemmadata, vocabulary, padlength):
         encoded.append(encode)
 
     return encoded
+
+
+def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size):
+
+    if ensemble_size > 1:
+        # Randomly split subsets
+        split_size = min_split_size if int(len(X) / ensemble_size) < min_split_size else int(
+            len(X) / ensemble_size)
+        sub_idx = np.random.choice(range(len(X)), size=split_size)
+        X_sub = [X[i] for i in sub_idx]
+        y_sub = [y[i] for i in sub_idx]
+        dataset = LateDataset(X_sub, y_sub)
+        train_ds, dev_ds = random_split(dataset, [len(X_sub) - int(len(X_sub) * 0.1), int(len(X_sub) * 0.1)])
+    else:
+        X_train = X[:train_size]
+        X_dev = X[train_size:]
+        y_train = y[:train_size]
+        y_dev = y[train_size:]
+        train_ds = LateDataset(X_train, y_train)
+        dev_ds = LateDataset(X_dev, y_dev)
+    train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+
+    return train_dl, dev_dl
+
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
 def classifyModelOutput(results, y, classes):

@@ -1,11 +1,11 @@
-question_classifier.py
+# question_classifier.py
 
 Created on:      01-Mar-2022 12:55:00
 Original Authors: Alexander Trebilcock, Ashka K. Abrarriadi, Joshua Sayce, Oluwadamini Akpotohwo, Wenqi Han, Zhaoyu Han
 Specification:
 
 
-Overview
+## Overview
 
 This program is a hybrid question classifier utilising supervised machine learning methods, developed by Team Late. It attempts to classify plaintext english question statements, such as "What year was Disneyland constructed?", to their predicted response type ("NUM:date").
 
@@ -32,7 +32,7 @@ Finally, the data must be encoded - or converted from tokenised strings into the
 A model is constructed, initialised using the generated embeddings, and given a reference to a config file, which it will use to self-configure the number of layers, hidden layers, and dimensions of the output classes.
 
 
-Training
+## Training
 
 The model can then be trained if the correct command was supplied - test data is input in 'batches', or subsets of encoded texts and label pairs. The model will use the embedding matrix passed earlier to convert the batch into a distributional representation. The prediction network (with initially random weights) will then be applied, classifying the results of the encoded text's network traversal using a softmax activation function. 
 
@@ -43,23 +43,25 @@ This process is repeated a configurable number of times (or 'epochs'), with the 
 If an "ensemble" number is specified, the entire training process is repeated for several distinct instances of model - all of which generate unique outputs. The outputs of each classification are combined into an optimised result.
 
 
-Testing
+## Testing
 
 The model can be tested if the correct command is supplied. The process is similar to the training method, but loss gradients are accumulated each epoch. The results of classification (i.e. label predictions) are returned.
 
 
-Outputs
+## Outputs
 
 Following the ensemble loop, the program will amalgamate the ensemble results into an average. In test mode, a file will be generated displaying the predicted class for each of the inputs.
 
 
-How to Use
+## How to Use
 
 The program can be ran by calling "question_classifier.py" on the python command line:
 
-    #python3 question_classifier.py
+```
+python3 question_classifier.py
+```
 
-A single mandatory argument must be passed, --train or --test, which informs the classifier to run in the referenced "mode" (note: a model must be trained prior to testing, or the user will be warned that the testing model is invalid). 
+A single mandatory argument must be passed, --train or --test, which informs the classifier to run in the referenced "mode" (note: **a model must be trained prior to testing, or the user will be warned that the testing model is invalid**). 
 
 All additional parameters may be found in the configuration file (default data/config.ini). A custom configuration file can be specified by using the --config flag, and supplying a directory to source the file.
 
