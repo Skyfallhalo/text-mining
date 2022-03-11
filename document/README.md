@@ -1,4 +1,4 @@
-# question_classifier.py
+# coursework-1
 
 Created on:      01-Mar-2022 12:55:00
 Original Authors: Alexander Trebilcock, Ashka K. Abrarriadi, Joshua Sayce, Oluwadamini Akpotohwo, Wenqi Han, Zhaoyu Han
@@ -66,7 +66,7 @@ A single mandatory argument must be passed, --train or --test, which informs the
 All additional parameters may be found in the configuration file (default data/config.ini). A custom configuration file can be specified by using the --config flag, and supplying a directory to source the file.
 
 
-Argument Listing:
+### Argument Listing:
 
     --train : Mandatory exclusive argument. Signals the classifier to run in training mode.
     
@@ -75,9 +75,25 @@ Argument Listing:
     --config [configuration_file_path] : Optional argument. Specify a custom configuration file.
 
 
-Directory and File Listing:
+### Example Command:
 
-data/ 
+To train a model, please issue the following command:
+
+```
+python3 question_classifier.py --train --config ../data/config.ini
+```
+
+Then to test the model, please issue the following command:
+
+```
+python3 question_classifier.py --test --config ../data/config.ini
+```
+
+**It should be noted that the training command must be issued before the testing command.**
+
+### Directory and File Listing:
+
+**data/**
 A directory that holds input and output files to be used by the program.
 
     data/bilstm_config.ini
@@ -98,7 +114,7 @@ A directory that holds input and output files to be used by the program.
     Additionally, model outputs will be saved in format model.$model_name$.$number$.pt .
     
 
-document/
+**document/**
 A directory holding supplementary documentation for the program.
     
     document/README.md
@@ -110,7 +126,7 @@ A directory holding supplementary documentation for the program.
     document/requirements.txt
     A list of non-version-specific packages required by the program.
     
-src/
+**src/**
 A directory containing the source code of the program.
     
     src/bilstm.py
@@ -132,7 +148,7 @@ A directory containing the source code of the program.
     Create train.txt, dev.txt, and test.txt from given files.
     
     
-Configuration Parameter Listing:
+### Configuration Parameter Listing:
 
     path_train 
     Path to train.txt file.
