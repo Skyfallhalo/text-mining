@@ -33,14 +33,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score, f1_score
 from torch.utils.data import DataLoader, Dataset
 
 from bilstm import main as bilstm_main
 from bow import main as bow_main
 from embedding import main as embedding_main
-from ffnn_classifier import testModel as ffnn_testModel
-from ffnn_classifier import trainModel as ffnn_trainModel
+# from ffnn_classifier import testModel as ffnn_testModel
+# from ffnn_classifier import trainModel as ffnn_trainModel
+from ffnn_classifier_bkp import testModel as ffnn_testModel
+from ffnn_classifier_bkp import trainModel as ffnn_trainModel
 
 #Basic Structual Definitions
 model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
@@ -49,7 +51,7 @@ model_sources = {'bow': bow_main, 'bilstm': bilstm_main}
 torch.manual_seed(1)
 random.seed(1)
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def main():
@@ -57,6 +59,7 @@ def main():
     #Read Arguments, Config Files
     args = handleArguments()
     config = readConfig(args.config)
+    classifierconfig = readConfig(config["Paths"]["classifier_config"])
 
     stopWords = loadData(config["Paths"]["stop_words"])
     ensemble_size = int(config["Model"]["ensemble_size"])
@@ -91,31 +94,31 @@ def main():
         modelstring = config["Model"]["model"]
         modelconfig = readConfig(config["Paths"][modelstring+"_config"])
 
-        if modelstring == "bilstm" or modelstring == "bow":
-            model = model_sources[modelstring](embeddings, modelconfig, len(classes))
-            model.to(device)
-
-        else:
-            raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
-
-        #Split training and development data and generate data loaders
-        X_train = encodeddata[:len(trainData)]
-        X_dev = encodeddata[len(trainData):]
-        y_train = indexed_targets[:len(trainData)]
-        y_dev = indexed_targets[len(trainData):]
-        train_ds = LateDataset(X_train, y_train)
-        dev_ds = LateDataset(X_dev, y_dev)
-        batch_size = int(config["Network Structure"]["batch_size"])
-        train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-        dev_dl = DataLoader(dev_ds, batch_size=batch_size)
-
         #Ensemble results loop
         for i in range(ensemble_size):
 
+            if modelstring == "bilstm" or modelstring == "bow":
+                model = model_sources[modelstring](embeddings, modelconfig, len(classes))
+                model.to(device)
+
+            else:
+                raise Exception("Error: no valid model specified (specified'" + modelstring + "'.")
+
+            # Split training and development data and generate data loaders
+            X_train = encodeddata[:len(trainData)]
+            X_dev = encodeddata[len(trainData):]
+            y_train = indexed_targets[:len(trainData)]
+            y_dev = indexed_targets[len(trainData):]
+            train_ds = LateDataset(X_train, y_train)
+            dev_ds = LateDataset(X_dev, y_dev)
+            batch_size = int(config["Network Structure"]["batch_size"])
+            train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+            dev_dl = DataLoader(dev_ds, batch_size=batch_size)
+
             #Train selected model (BOW or BiLSTM) if "train" arg specified
             model = ffnn_trainModel(train_dl, dev_dl, model,
-                                    numEpochs=int(config["Model Settings"]["epoch"]),
-                                    lr=float(config["Hyperparameters"]["lr_param"]))
+                                    numEpochs=int(classifierconfig["Model Settings"]["epoch"]),
+                                    lr=float(classifierconfig["Hyperparameters"]["lr_param"]))
 
             torch.save({
                 "model_state_dict": model.state_dict()
@@ -173,7 +176,7 @@ def main():
             results.append(ffnn_testModel(X_test, y_test, model))
 
             #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-            results.append(classifyModelOutput(results, y_test, classes))
+            classifyModelOutput(results, y_test, classes)
 
         aggregateResults()
 
@@ -255,7 +258,7 @@ def tokeniseData(data, stopwords, min_occurence):
         if value > min_occurence:
             uniqueWords.append(key)
 
-    return documents, ["", "#unk#"] + uniqueWords
+    return documents, ["#unk#"] + uniqueWords
 
 
 #Splits data into strings, and their respective labels.
@@ -317,6 +320,10 @@ def classifyModelOutput(results, y, classes):
     for i in torch.flip(torch.nonzero(idx_list, as_tuple=False), dims=[0]).squeeze():
         del target_names[i]
     print(classification_report(y.cpu(), y_pred.cpu(), target_names=target_names, zero_division=0))
+    print("accuracy:", accuracy_score(y.cpu(), y_pred.cpu()))
+    print("micro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='micro'))
+    print("macro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='macro'))
+    print("weighted F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='weighted'))
 
 
 def aggregateResults():

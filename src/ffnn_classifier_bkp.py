@@ -53,26 +53,16 @@ def trainModel(train_dl, val_dl, model, numEpochs=10, lr=0.1):
         val_total = 0
         total_val_loss = 0.0
         for x_batch, y_batch in val_dl:
-            # print(x_batch)
             x_batch = x_batch.type(torch.LongTensor).to(device)
             y_batch = y_batch.to(device)
             y_out = model(x_batch)
             loss = loss_fn(y_out, y_batch)
             val_total += y_batch.shape[0]
             total_val_loss += loss.item() * y_batch.shape[0]
-            # _, y_pred = torch.max(y_out, 1)
-            # print(y_out)
-            y_out = F.softmax(y_out, dim=1)
             y_pred = torch.max(y_out, 1)[1]
             correct += (y_pred == y_batch).sum().item()
-            # print("out")
-            # print(y_pred, y_batch)
-            # print(y_pred)
-            # print(y_batch)
-            # print((y_pred == y_batch), (y_pred == y_batch).sum())
         val_loss = total_val_loss / val_total
         val_acc = correct / val_total
-        # print(correct, val_total)
 
         elapsed_time = time.time() - start_time
 
@@ -88,7 +78,6 @@ def testModel(x, y, model):
     x = x.to(device)
     y = y.to(device)
     y_out = model(x)
-    y_out = F.softmax(y_out, dim=1)
     y_pred = torch.max(y_out, 1)[1]
 
     return y_pred

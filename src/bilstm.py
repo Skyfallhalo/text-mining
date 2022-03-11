@@ -48,11 +48,12 @@ class BiLSTM(nn.Module):
         the BiLSTM model is used firstly to generate the final output of hidden state. Then using linear
         transformation, the dimension of hidden layer is transformed to the dimension of classes for classification.
 
-        :param seq: A batch of input data (encoded sentences)
+        :param seq: A batch of input data (encoded sentences) of shape (batch_size, sentence_length)
         :type seq: Tensor
         :return:
         """
         # Get word vectors of each sentences
+        # The assigned tensor is of shape (batch_size, sentence_length, word_vector_dim)
         seq = self.embedding(seq).to(self.device)
 
         # Forward pass through BiLSTM model and get the output
@@ -60,7 +61,10 @@ class BiLSTM(nn.Module):
 
         # Use the combination of hidden states of both forward direction
         # and backward direction to transform output
+        # The input tensor is of shape (batch_size, hidden_size)
+        # And output tensor is of shape (batch_size, class_num)
         out = self.fc(ht[0, :, :] + ht[1, :, :])
+
         return out
 
 
