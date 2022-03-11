@@ -35,13 +35,8 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from bilstm import main as bilstm_main
 from bow import main as bow_main
 from embedding import main as embedding_main
-# from ffnn_classifier import testModel as ffnn_testModel
-# from ffnn_classifier import trainModel as ffnn_trainModel
-from ffnn_classifier_bkp import testModel as ffnn_testModel
-from ffnn_classifier_bkp import trainModel as ffnn_trainModel
-
-import matplotlib.pyplot
-import matplotlib.ticker
+from ffnn_classifier import testModel as ffnn_testModel
+from ffnn_classifier import trainModel as ffnn_trainModel
 
 #Basic Definitions
 defaultConfig = '../data/config.ini'
@@ -104,7 +99,7 @@ def readConfig(configFile):
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
     data = []
-    with open(directory, "r") as f:# get data
+    with open(directory, "r", encoding = 'latin-1') as f:# get data
         for line in f:
             data.append(line.strip())
 
