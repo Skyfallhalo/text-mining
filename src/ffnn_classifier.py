@@ -1,7 +1,7 @@
 #//////////////////////////////////////////////////////////
 #   ffnn_classifier.py
 #   Created on:      01-Mar-2022 14:30:00
-#   Original Author: J. Sayce
+#   Original Author: W. Han, J. Sayce
 #   Specification:
 #
 #   base file for the feed-forward neural network classifier,
@@ -11,119 +11,128 @@
 
 import sys
 import random
+import time
 
 import numpy as np
 
 import torch   
-from torch.utils.data import Dataset, DataLoader
-
-# import torchtext
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional
+from torch.utils.data import Dataset, DataLoader
 
 import torch.optim as optim
 
+class LateDataset(Dataset):
+    def __init__(self, text, label):
+        self.text = text
+        self.label = label
 
-#inference 
-#import spacy
+    def __len__(self):
+        return len(self.label)
 
-#Accuracy Metric
-def binary_accuracy(preds, y):
-    #round predictions to the closest integer
-    rounded_preds = torch.round(preds)
+    def __getitem__(self, idx):
+        return torch.tensor(self.text[idx], dtype=torch.int32), self.label[idx]
     
-    correct = (rounded_preds == y).float() 
-    acc = correct.sum() / len(correct)
-    return acc
-    
-def prepare_sequence(seq, to_ix):
-    idxs = [to_ix[w] for w in seq]
-    return torch.tensor(idxs, dtype=torch.long)
-
 def trainModel(data_train, data_dev, model, numEpochs=10, lr=0.1):
            
     bestLoss = float('inf')
     
     #Define the Optim. (Stochastic G.D.) and Loss metric
-    # optimiser = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     optimiser = optim.SGD(model.parameters(), lr=lr)
-    criterion = nn.BCELoss()
+    loss_function = torch.nn.functional.cross_entropy
 
     #CUDA
     #Cuda algorithms
     torch.backends.cudnn.deterministic = True    
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')      
-    model = model.to(device)
-    criterion = criterion.to(device)    
+    model = model.to(device)  
     
     #Main loop
-    epoch_loss, epoch_acc = 0, 0
+    trainLoss, trainAcc = 0, 0
      
     for epoch in range(numEpochs):
+        epochStart = time.time()
+ 
+        model.train()
+        
+        epochLoss, epochTotal = 0, 0
+        
+        for text, targets in data_train:
+            
+            optimiser.zero_grad()
 
-        for x, y in data_train:
-            
-            model.zero_grad()
+            text = text.type(torch.LongTensor).to(device)
+            targets = targets.to(device)            
          
-            sentence_in = prepare_sequence(sentence, word_to_ix)
-            targets = prepare_sequence(tags, tag_to_ix)
-         
-            tag_scores = model(data)
+            tag_scores = model(text)
             
-            #Compute loss/accuracy 
+            #Compute loss 
             loss = loss_function(tag_scores, targets)
-            acc = binary_accuracy(predictions, batch.Label)   
             
             #Backpropogate and optimise
             loss.backward()
-            optimizer.step()        
+            optimiser.step()        
         
-            #Loss and accuracy
-            epoch_loss += loss.item()  
-            epoch_acc += acc.item()           
+            #Epoch loss and accuracy
+            epochLoss += loss.item() * targets.shape[0]   
+            epochTotal += targets.shape[0]
+                    
+        trainLoss = epochLoss / epochTotal
         
-    train_loss, train_acc = epoch_loss / len(iterator), epoch_acc / len(iterator)
+        #Save a local best to file
+        model.eval()
+        
+        correctClassifications = 0
+        valueLoss = 0.0
+        vTotal = 0
+        
+        for text, targets in data_dev:
+            text = text.type(torch.LongTensor).to(device)
+            targets = targets.to(device)
+            
+            tag_scores = model(text)
+            
+            #Compute loss
+            loss = loss_function(tag_scores, targets)
+            
+            #Epoch loss and accuracy       
+            valueLoss += loss.item() * targets.shape[0]
+            vTotal += targets.shape[0]
+            
+            goldLabels = torch.max(tag_scores, 1)[1]
+            correctClassifications += (goldLabels == targets).sum().item()
+            
+        vLoss = valueLoss / vTotal
+        vAccuracy = correctClassifications / vTotal
+        
+        #Finish and print
+        epochTime = time.time() - epochStart
 
-    ##Save a local best to file
-    #if train_loss < bestLoss:
-    #    bestLoss = valid_loss
-    #    torch.save(model.state_dict(), 'saved_weights.pt')
-    #
-    #print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%')
-    #print(f'\tTest Loss: {valid_loss:.3f} |  Test Acc: {valid_acc*100:.2f}%')   
+        printResults(epoch, numEpochs, trainLoss, vLoss, vAccuracy, epochTime)
+        
+    return model
     
-    ##load weights
-    #path='saved_weights.pt'
-    #model.load_state_dict(torch.load(path));
-    #model.eval();    
+def printResults(epoch, numEpochs, trainLoss, vLoss, vAccuracy, epochTime):
+    print("Epoch [{:02}/{:02}]".format(epoch+1, numEpochs), end='\t')
+    print("loss {:.4}".format(trainLoss), end='\t')
+    print("val loss {:.4}".format(vLoss), end='\t')
+    print("val_acc {:.4}".format(vAccuracy), end='\t')
+    print("t time {:.4}".format(epochTime), end='\n')
     
-def testModel(model, iterator, criterion):
+    
+def testModel(text, targets, model):
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     epoch_loss, epoch_acc = 0, 0
 
-    model.eval()
+    text = text.to(device)
+    targets = targets.to(device)
+    tag_scores = model(text)
+    predictions = torch.max(tag_scores, 1)[1]
     
-    #deactivates autograd
-    with torch.no_grad():
-    
-        for batch in iterator:
-        
-            #Prepare inputs
-            text, text_lengths = batch.Text
-            
-            #Forward pass (there's an error here)
-            predictions = model(text)
-            
-            #Compute loss/accuracy, do not backpropogate
-            loss = criterion(predictions, batch.Label)
-            acc = binary_accuracy(predictions, batch.Label)
-            
-            #keep track of loss and accuracy
-            epoch_loss += loss.item()
-            epoch_acc += acc.item()
-        
-    return epoch_loss / len(iterator), epoch_acc / len(iterator)
-    
+    return predictions
+
     
 if __name__ == "__main__":
     main(*sys.argv[1:])

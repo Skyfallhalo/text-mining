@@ -35,13 +35,8 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from bilstm import main as bilstm_main
 from bow import main as bow_main
 from embedding import main as embedding_main
-# from ffnn_classifier import testModel as ffnn_testModel
-# from ffnn_classifier import trainModel as ffnn_trainModel
-from ffnn_classifier_bkp import testModel as ffnn_testModel
-from ffnn_classifier_bkp import trainModel as ffnn_trainModel
-
-import matplotlib.pyplot
-import matplotlib.ticker
+from ffnn_classifier import testModel as ffnn_testModel
+from ffnn_classifier import trainModel as ffnn_trainModel
 
 #Basic Definitions
 defaultConfig = '../data/config.ini'
@@ -72,9 +67,9 @@ def main():
     elif args.test:
 
         # Obtain ensemble's results of interrogating the specified NN.
-        results, results_ens = testModel(config, ensembleSize, stopWords)
-
-        displayResults(results, results_ens)
+        results, results_ens, accuracy = testModel(config, ensembleSize, stopWords)
+        
+        outputResults(config, results_ens, accuracy)
 
 
 #Checks for the three required arguments - train or test, manually specify config, and config path.
@@ -104,7 +99,7 @@ def readConfig(configFile):
 #Attempts to load data from the config-specified source for "Training Set 5".
 def loadData(directory):
     data = []
-    with open(directory, "r") as f:# get data
+    with open(directory, "r", encoding = 'latin-1') as f:# get data
         for line in f:
             data.append(line.strip())
 
@@ -204,20 +199,6 @@ def generateDatasets(X, y, ensemble_size, batch_size, train_size, min_split_size
         X_dev = X[train_size:]
         y_train = y[:train_size]
         y_dev = y[train_size:]
-
-        ##############################################################################
-        percentage = 0.2
-
-        sub_size = int(len(X_train) * percentage)
-        sub_idx = np.random.choice(range(len(X_train)), size=sub_size)
-        X_train = [X_train[i] for i in sub_idx]
-        y_train = [y_train[i] for i in sub_idx]
-
-        sub_size = int(len(X_dev) * percentage)
-        sub_idx = np.random.choice(range(len(X_dev)), size=sub_size)
-        X_dev = [X_dev[i] for i in sub_idx]
-        y_dev = [y_dev[i] for i in sub_idx]
-        #############################################################################
 
         train_ds = LateDataset(X_train, y_train)
         dev_ds = LateDataset(X_dev, y_dev)
@@ -352,16 +333,16 @@ def testModel(config, ensembleSize, stopWords):
     #return results, y_pred_ens, 
     
     #Classify data (accuracy/F1 scores) produced by model if "test" arg specified
-    plaintext_lab = classifyModelOutput(y_test, y_pred_ens, classes)
+    plaintext_lab, accuracy = classifyModelOutput(y_test, y_pred_ens, classes)
     
-    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label.
+    #Return plaintext results for easier graphing. Format: Question, Prediction, Actual Label, Accuracy
     p_results = [[classes[encodedlabel] for encodedlabel in result.tolist()] for result in results]
     p_results = [[[val, p_results[i][j], targets[j]] for j, val in enumerate(text)] for i, result in enumerate(results)]
     
     p_results_ens = [classes[encodedlabel] for encodedlabel in y_pred_ens.tolist()]
     p_results_ens = [[val, p_results_ens[i], targets[i]] for i, val in enumerate(text)]    
     
-    return p_results, p_results_ens
+    return p_results, p_results_ens, accuracy
 
 #Attempts to run FF-NN with data, recieves returned data, and saves results.
 def classifyModelOutput(y, y_pred, classes):
@@ -383,7 +364,7 @@ def classifyModelOutput(y, y_pred, classes):
     print("macro F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='macro'))
     print("weighted F1 score:", f1_score(y.cpu(), y_pred.cpu(), average='weighted'))
     
-    return target_names
+    return target_names, accuracy_score(y.cpu(), y_pred.cpu())
 
 #Takes the map of tensor results, and uses an ensemble model to generate a single set of classifications.
 def aggregateResults(config, results):
@@ -395,12 +376,24 @@ def aggregateResults(config, results):
     y_pred, _ = torch.mode(results, 0)
     return y_pred
 
-
-def displayResults(results, results_ens):
+def outputResults(config, results, accuracy):
+    file = config["Evaluation"]["path_eval_result"]
     
-    #Using MatPlotLib
-    fig, ax = matplotlib.pyplot.subplots() # Make a new, large subplot 
+    with open(file, 'w') as output:
+    
+        model = config['Model']['model']
+        ensemble = config['Model']['ensemble_size']
+        
+        output.write('Model Results:\n')  
+        output.write('[Model used: {0}] [Model count used (more than one indicates ensemble): {1}]\n'.format(model, ensemble)) 
+        output.write('Reported accuracy: {0}\n\n'.format(accuracy))    
 
+        for entry in results:
+    
+            line = 'Question: {0},   Predicted Label: {1},   Actual Label: {2}\n'.format(entry[0], entry[1], entry[2])
+            output.write(line)    
+        
+        print("Results outputted to file '{0}' successfully.".format(file))
 
 class LateDataset(Dataset):
     def __init__(self, text, label):
