@@ -29,11 +29,17 @@ class BOWClassifier(nn.Module):
 
         for i in x: # find vec_bow(x)
 
-            lookup_tensor = torch.LongTensor(i)
+            i = i[torch.nonzero(i).squeeze()] # remove padding words
+            lookup_tensor = Variable(torch.LongTensor(i))
             vec = self.embedding(lookup_tensor)
-            vec = vec.mean(dim=0)
-            bow_vector.append(vec)
 
+            if vec.dim() == 1: # add padding vectors back
+
+                vec = torch.unsqueeze(vec, 0)
+
+            vec = vec.sum(dim=0)
+            bow_vector.append(vec)
+            
         bow_vector = torch.stack(bow_vector)
 
         return F.log_softmax(self.linear(bow_vector), dim=1)
